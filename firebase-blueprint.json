@@ -1,0 +1,149 @@
+{
+  "entities": {
+    "User": {
+      "title": "User",
+      "description": "Registered candidate or employer profile",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "maxLength": 128 },
+        "name": { "type": "string", "maxLength": 100 },
+        "email": { "type": "string", "maxLength": 120 },
+        "phone": { "type": "string", "maxLength": 30 },
+        "role": { "type": "string", "enum": ["Candidate", "Employer"] },
+        "avatarUrl": { "type": "string", "maxLength": 500 },
+        "location": { "type": "string", "maxLength": 150 },
+        "quote": { "type": "string", "maxLength": 300 },
+        "aboutMe": { "type": "string", "maxLength": 3000 },
+        "createdAt": { "type": "string" },
+        "updatedAt": { "type": "string" }
+      },
+      "required": ["id", "name", "email", "role"]
+    },
+    "Job": {
+      "title": "Job",
+      "description": "Verified job opening on MOAS",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "maxLength": 128 },
+        "title": { "type": "string", "maxLength": 150 },
+        "company": { "type": "string", "maxLength": 100 },
+        "location": { "type": "string", "maxLength": 150 },
+        "type": { "type": "string", "maxLength": 50 },
+        "experience": { "type": "string", "maxLength": 50 },
+        "salary": { "type": "string", "maxLength": 80 },
+        "description": { "type": "string", "maxLength": 10000 },
+        "department": { "type": "string", "maxLength": 80 },
+        "isVerified": { "type": "boolean" },
+        "postedDate": { "type": "string" }
+      },
+      "required": ["id", "title", "company", "location", "salary"]
+    },
+    "Application": {
+      "title": "Application",
+      "description": "Candidate application to a job position",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "maxLength": 128 },
+        "jobId": { "type": "string", "maxLength": 128 },
+        "jobTitle": { "type": "string", "maxLength": 150 },
+        "company": { "type": "string", "maxLength": 100 },
+        "candidateId": { "type": "string", "maxLength": 128 },
+        "candidateName": { "type": "string", "maxLength": 100 },
+        "candidateEmail": { "type": "string", "maxLength": 120 },
+        "appliedDate": { "type": "string", "maxLength": 50 },
+        "status": { "type": "string", "enum": ["Applied", "Under Review", "Shortlisted", "Interview Scheduled", "Rejected", "Offered"] },
+        "stage": { "type": "string", "maxLength": 60 },
+        "matchScore": { "type": "number" },
+        "resumeName": { "type": "string", "maxLength": 150 }
+      },
+      "required": ["id", "jobId", "candidateId", "status"]
+    },
+    "Resume": {
+      "title": "Resume",
+      "description": "Candidate CV or resume document metadata",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "maxLength": 128 },
+        "userId": { "type": "string", "maxLength": 128 },
+        "name": { "type": "string", "maxLength": 150 },
+        "size": { "type": "string", "maxLength": 50 },
+        "updatedAt": { "type": "string", "maxLength": 50 },
+        "type": { "type": "string", "maxLength": 20 },
+        "isPrimary": { "type": "boolean" }
+      },
+      "required": ["id", "userId", "name", "type"]
+    },
+    "Company": {
+      "title": "Company",
+      "description": "Tech employer and enterprise hiring profile",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "maxLength": 128 },
+        "name": { "type": "string", "maxLength": 100 },
+        "industry": { "type": "string", "maxLength": 100 },
+        "location": { "type": "string", "maxLength": 150 },
+        "openJobsCount": { "type": "number" },
+        "rating": { "type": "number" },
+        "verified": { "type": "boolean" }
+      },
+      "required": ["id", "name", "industry"]
+    },
+    "SavedJob": {
+      "title": "SavedJob",
+      "description": "Candidate bookmarked job posting",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "maxLength": 128 },
+        "userId": { "type": "string", "maxLength": 128 },
+        "jobId": { "type": "string", "maxLength": 128 },
+        "savedDate": { "type": "string", "maxLength": 50 }
+      },
+      "required": ["id", "userId", "jobId"]
+    },
+    "JobAlert": {
+      "title": "JobAlert",
+      "description": "Automated career alerts criteria",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "maxLength": 128 },
+        "userId": { "type": "string", "maxLength": 128 },
+        "keyword": { "type": "string", "maxLength": 100 },
+        "location": { "type": "string", "maxLength": 100 },
+        "role": { "type": "string", "maxLength": 100 },
+        "frequency": { "type": "string", "enum": ["Daily", "Weekly", "Instant"] },
+        "active": { "type": "boolean" }
+      },
+      "required": ["id", "userId", "keyword"]
+    }
+  },
+  "firestore": {
+    "/users/{userId}": {
+      "schema": "User",
+      "description": "User candidate and employer profiles"
+    },
+    "/jobs/{jobId}": {
+      "schema": "Job",
+      "description": "Job listings published on MOAS"
+    },
+    "/applications/{applicationId}": {
+      "schema": "Application",
+      "description": "Submitted job applications"
+    },
+    "/resumes/{resumeId}": {
+      "schema": "Resume",
+      "description": "Uploaded resume records permanently tied to candidate IDs"
+    },
+    "/companies/{companyId}": {
+      "schema": "Company",
+      "description": "Profiles of verified hiring companies"
+    },
+    "/savedJobs/{savedJobId}": {
+      "schema": "SavedJob",
+      "description": "Bookmarked job positions"
+    },
+    "/jobAlerts/{alertId}": {
+      "schema": "JobAlert",
+      "description": "Configured job alert subscriptions"
+    }
+  }
+}

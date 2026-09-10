@@ -1,0 +1,6 @@
+{
+  "name": "MOAS",
+  "description": "MOAS (ML Opportunities and Algorithmic Services) - Intelligent Career & Talent Platform for Job Seekers and Employers with AI-powered Matching, Resume Optimization, and Applications.",
+  "requestFramePermissions": ["camera"],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

@@ -1,0 +1,128 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // Global Safety Net: Default-deny all unhandled paths
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // Helper functions
+    function isValidId(id) {
+      return id is string && id.size() > 0 && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    function incoming() {
+      return request.resource.data;
+    }
+
+    function existing() {
+      return resource.data;
+    }
+
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isAdmin() {
+      return isSignedIn() && (
+        request.auth.token.email == 'kruthikpranav02@gmail.com' ||
+        exists(/databases/$(database)/documents/admins/$(request.auth.uid))
+      );
+    }
+
+    function isOwner(userId) {
+      return isSignedIn() && (request.auth.uid == userId || isAdmin());
+    }
+
+    // Validation blueprints
+    function isValidUser(data) {
+      return data.keys().hasAll(['id', 'name', 'email', 'role']) &&
+        data.id is string && isValidId(data.id) &&
+        data.name is string && data.name.size() > 0 && data.name.size() <= 100 &&
+        data.email is string && data.email.size() > 0 && data.email.size() <= 120 &&
+        (data.role == 'Candidate' || data.role == 'Employer');
+    }
+
+    function isValidJob(data) {
+      return data.keys().hasAll(['id', 'title', 'company', 'location', 'salary']) &&
+        data.id is string && isValidId(data.id) &&
+        data.title is string && data.title.size() > 0 && data.title.size() <= 150 &&
+        data.company is string && data.company.size() > 0 && data.company.size() <= 100 &&
+        data.location is string && data.location.size() <= 150 &&
+        data.salary is string && data.salary.size() <= 80;
+    }
+
+    function isValidApplication(data) {
+      return data.keys().hasAll(['id', 'jobId', 'candidateId', 'status']) &&
+        data.id is string && isValidId(data.id) &&
+        data.jobId is string && isValidId(data.jobId) &&
+        data.candidateId is string && isValidId(data.candidateId) &&
+        data.status in ['Applied', 'Under Review', 'Shortlisted', 'Interview Scheduled', 'Rejected', 'Offered'];
+    }
+
+    function isValidResume(data) {
+      return data.keys().hasAll(['id', 'userId', 'name', 'type']) &&
+        data.id is string && isValidId(data.id) &&
+        data.userId is string && isValidId(data.userId) &&
+        data.name is string && data.name.size() > 0 && data.name.size() <= 150 &&
+        data.type is string && data.type.size() <= 20;
+    }
+
+    // 1. Users Collection
+    match /users/{userId} {
+      allow get: if isSignedIn();
+      allow list: if isSignedIn() && (resource.data.id == request.auth.uid || isAdmin());
+      allow create: if isSignedIn() && isValidId(userId) && isValidUser(incoming()) && (request.auth.uid == userId || isAdmin());
+      allow update: if isSignedIn() && isValidId(userId) && isValidUser(incoming()) && (request.auth.uid == userId || isAdmin()) && incoming().id == existing().id;
+      allow delete: if isSignedIn() && isValidId(userId) && (request.auth.uid == userId || isAdmin());
+    }
+
+    // 2. Jobs Collection
+    match /jobs/{jobId} {
+      allow read: if true;
+      allow create: if isSignedIn() && isValidId(jobId) && isValidJob(incoming());
+      allow update: if isSignedIn() && isValidId(jobId) && isValidJob(incoming()) && incoming().id == existing().id;
+      allow delete: if isSignedIn() && isValidId(jobId) && isAdmin();
+    }
+
+    // 3. Applications Collection
+    match /applications/{applicationId} {
+      allow get: if isSignedIn() && isValidId(applicationId) && (resource.data.candidateId == request.auth.uid || isAdmin());
+      allow list: if isSignedIn() && (resource.data.candidateId == request.auth.uid || isAdmin());
+      allow create: if isSignedIn() && isValidId(applicationId) && isValidApplication(incoming()) && (incoming().candidateId == request.auth.uid || isAdmin());
+      allow update: if isSignedIn() && isValidId(applicationId) && isValidApplication(incoming()) && (existing().candidateId == request.auth.uid || isAdmin()) && incoming().id == existing().id && incoming().jobId == existing().jobId && incoming().candidateId == existing().candidateId;
+      allow delete: if isSignedIn() && isValidId(applicationId) && (existing().candidateId == request.auth.uid || isAdmin());
+    }
+
+    // 4. Resumes Collection
+    match /resumes/{resumeId} {
+      allow get: if isSignedIn() && isValidId(resumeId) && (resource.data.userId == request.auth.uid || isAdmin());
+      allow list: if isSignedIn() && (resource.data.userId == request.auth.uid || isAdmin());
+      allow create: if isSignedIn() && isValidId(resumeId) && isValidResume(incoming()) && (incoming().userId == request.auth.uid || isAdmin());
+      allow update: if isSignedIn() && isValidId(resumeId) && isValidResume(incoming()) && (existing().userId == request.auth.uid || isAdmin()) && incoming().id == existing().id && incoming().userId == existing().userId;
+      allow delete: if isSignedIn() && isValidId(resumeId) && (existing().userId == request.auth.uid || isAdmin());
+    }
+
+    // 5. Companies Collection
+    match /companies/{companyId} {
+      allow read: if true;
+      allow write: if isSignedIn() && isAdmin();
+    }
+
+    // 6. Saved Jobs Collection
+    match /savedJobs/{savedJobId} {
+      allow read: if isSignedIn() && (resource.data.userId == request.auth.uid || isAdmin());
+      allow create: if isSignedIn() && isValidId(savedJobId) && (incoming().userId == request.auth.uid || isAdmin());
+      allow delete: if isSignedIn() && isValidId(savedJobId) && (existing().userId == request.auth.uid || isAdmin());
+    }
+
+    // 7. Job Alerts Collection
+    match /jobAlerts/{alertId} {
+      allow read: if isSignedIn() && (resource.data.userId == request.auth.uid || isAdmin());
+      allow create: if isSignedIn() && isValidId(alertId) && (incoming().userId == request.auth.uid || isAdmin());
+      allow update: if isSignedIn() && isValidId(alertId) && (existing().userId == request.auth.uid || isAdmin());
+      allow delete: if isSignedIn() && isValidId(alertId) && (existing().userId == request.auth.uid || isAdmin());
+    }
+  }
+}
