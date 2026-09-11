@@ -9,7 +9,7 @@
         "name": { "type": "string", "maxLength": 100 },
         "email": { "type": "string", "maxLength": 120 },
         "phone": { "type": "string", "maxLength": 30 },
-        "role": { "type": "string", "enum": ["Candidate", "Employer"] },
+        "role": { "type": "string", "enum": ["Candidate", "Employer", "jobseeker", "employer"] },
         "avatarUrl": { "type": "string", "maxLength": 500 },
         "location": { "type": "string", "maxLength": 150 },
         "quote": { "type": "string", "maxLength": 300 },
@@ -114,6 +114,65 @@
         "active": { "type": "boolean" }
       },
       "required": ["id", "userId", "keyword"]
+    },
+    "CompanyRating": {
+      "title": "CompanyRating",
+      "description": "User reviews and star ratings for companies",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "maxLength": 128 },
+        "companyName": { "type": "string", "maxLength": 150 },
+        "userId": { "type": "string", "maxLength": 128 },
+        "userName": { "type": "string", "maxLength": 100 },
+        "userRole": { "type": "string", "maxLength": 100 },
+        "rating": { "type": "number" },
+        "cultureRating": { "type": "number" },
+        "workLifeRating": { "type": "number" },
+        "growthRating": { "type": "number" },
+        "compensationRating": { "type": "number" },
+        "reviewTitle": { "type": "string", "maxLength": 200 },
+        "reviewText": { "type": "string", "maxLength": 3000 },
+        "pros": { "type": "string", "maxLength": 1000 },
+        "cons": { "type": "string", "maxLength": 1000 },
+        "recommendToFriend": { "type": "boolean" },
+        "createdAt": { "type": "string" }
+      },
+      "required": ["id", "companyName", "userId", "rating"]
+    },
+    "ProfileView": {
+      "title": "ProfileView",
+      "description": "Live verified profile view event from recruiters and employers",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "maxLength": 128 },
+        "userId": { "type": "string", "maxLength": 128 },
+        "viewerType": { "type": "string", "enum": ["Recruiter", "Hiring Manager", "Employer", "Platform Visitor"] },
+        "viewerName": { "type": "string", "maxLength": 100 },
+        "viewerCompany": { "type": "string", "maxLength": 100 },
+        "viewerRole": { "type": "string", "maxLength": 100 },
+        "source": { "type": "string", "maxLength": 200 },
+        "viewedAt": { "type": "string" },
+        "durationSeconds": { "type": "number" }
+      },
+      "required": ["id", "userId", "viewerName", "viewedAt"]
+    },
+    "OTPDispatch": {
+      "title": "OTPDispatch",
+      "description": "Live OTP verification dispatch sent to mobile phone or Gmail",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "maxLength": 128 },
+        "code": { "type": "string", "maxLength": 10 },
+        "channel": { "type": "string", "enum": ["sms", "email", "both"] },
+        "destination": { "type": "string", "maxLength": 150 },
+        "phone": { "type": "string", "maxLength": 30 },
+        "email": { "type": "string", "maxLength": 120 },
+        "status": { "type": "string", "enum": ["sent", "delivered", "verified", "expired"] },
+        "expiresAt": { "type": "string" },
+        "createdAt": { "type": "string" },
+        "verifiedAt": { "type": "string" }
+      },
+      "required": ["id", "code", "channel", "createdAt", "expiresAt"]
     }
   },
   "firestore": {
@@ -144,6 +203,18 @@
     "/jobAlerts/{alertId}": {
       "schema": "JobAlert",
       "description": "Configured job alert subscriptions"
+    },
+    "/companyRatings/{ratingId}": {
+      "schema": "CompanyRating",
+      "description": "Candidate and employee submitted company ratings and reviews"
+    },
+    "/profileViews/{viewId}": {
+      "schema": "ProfileView",
+      "description": "Live recruiter and employer profile view audit events"
+    },
+    "/otps/{otpId}": {
+      "schema": "OTPDispatch",
+      "description": "Live OTP verification records sent to mobile phone and Gmail"
     }
   }
 }

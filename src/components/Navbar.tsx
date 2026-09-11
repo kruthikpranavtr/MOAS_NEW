@@ -87,6 +87,7 @@ export const Navbar: React.FC<NavbarProps> = ({
   const navItems: { label: string; state: NavigationState; key: string }[] = [
     { label: "Home", state: "home", key: "nav.home" },
     { label: "Find Jobs", state: "find-jobs", key: "nav.findJobs" },
+    { label: "Top Companies", state: "top-companies", key: "nav.topCompanies" },
     { label: "Post a Job", state: "post-job", key: "nav.postJob" },
   ];
 
@@ -373,7 +374,12 @@ export const Navbar: React.FC<NavbarProps> = ({
             {profileDropdownOpen && (
               <div className="absolute right-0 mt-2 w-56 bg-white border border-slate-200 rounded-2xl shadow-xl py-2 z-50 animate-in fade-in slide-in-from-top-2 duration-150">
                 <div className="px-4 py-2.5 border-b border-slate-100">
-                  <p className="text-sm font-bold text-slate-800">{user.name}</p>
+                  <div className="flex items-center justify-between">
+                    <p className="text-sm font-bold text-slate-800">{user.name}</p>
+                    <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-teal-50 text-teal-700">
+                      {user.role === "Employer" ? "Employer" : "Job Seeker"}
+                    </span>
+                  </div>
                   <p className="text-xs text-slate-500 truncate">{user.email}</p>
                 </div>
                 <div className="py-1">
@@ -390,12 +396,12 @@ export const Navbar: React.FC<NavbarProps> = ({
                   <button
                     onClick={() => {
                       setProfileDropdownOpen(false);
-                      onNavigate("dashboard");
+                      onNavigate(user.role === "Employer" ? "dashboard/employer" : "dashboard/jobseeker");
                     }}
                     className="w-full px-4 py-2 text-left text-sm text-slate-700 hover:bg-slate-50 flex items-center gap-2.5 cursor-pointer"
                   >
                     <Briefcase className="w-4 h-4 text-slate-400" />
-                    {t("nav.dashboard", "Dashboard")}
+                    {user.role === "Employer" ? "Employer Dashboard" : t("nav.dashboard", "Dashboard")}
                   </button>
                   <button
                     onClick={() => {

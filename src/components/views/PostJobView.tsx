@@ -16,11 +16,12 @@ import { Job } from "../../types";
 
 interface PostJobViewProps {
   onJobPublished: (job: Job) => void;
+  defaultCompany?: string;
 }
 
-export const PostJobView: React.FC<PostJobViewProps> = ({ onJobPublished }) => {
+export const PostJobView: React.FC<PostJobViewProps> = ({ onJobPublished, defaultCompany = "" }) => {
   const [jobTitle, setJobTitle] = useState("Senior Machine Learning Engineer");
-  const [companyName, setCompanyName] = useState("");
+  const [companyName, setCompanyName] = useState(defaultCompany);
   const [category, setCategory] = useState("Data & Machine Learning");
   const [employmentType, setEmploymentType] = useState<any>("Full Time");
   const [experienceLevel, setExperienceLevel] = useState("3 – 5 Yrs");

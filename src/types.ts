@@ -4,7 +4,10 @@ export type NavigationState =
   | "otp"
   | "home"
   | "dashboard"
+  | "dashboard/jobseeker"
+  | "dashboard/employer"
   | "find-jobs"
+  | "top-companies"
   | "post-job"
   | "my-applications"
   | "saved-jobs"
@@ -36,6 +39,8 @@ export interface Job {
   isNew?: boolean;
   isSaved?: boolean;
   matchScore?: number;
+  rating?: number;
+  reviewsCount?: number;
 }
 
 export interface Application {
@@ -145,10 +150,20 @@ export interface ResumeItem {
 
 export interface RegisteredUser {
   id: string;
+  username?: string;
+  password?: string;
   name: string;
   email: string;
   phone: string;
-  role: "Candidate" | "Employer";
+  role: "Candidate" | "Employer" | "jobseeker" | "employer";
+  companyName?: string;
+  companyEmail?: string;
+  industry?: string;
+  companySize?: string;
+  contactPerson?: string;
+  companyWebsite?: string;
+  skills?: string[];
+  experienceLevel?: string;
   avatarUrl?: string;
   title?: string;
   location?: string;
@@ -159,6 +174,8 @@ export interface RegisteredUser {
 
 export interface UserProfile {
   id: string;
+  username?: string;
+  password?: string;
   name: string;
   role: string;
   email: string;
@@ -173,6 +190,11 @@ export interface UserProfile {
   aboutMe: string;
   profileStrength: number;
   skills: string[];
+  companyName?: string;
+  companyEmail?: string;
+  companySize?: string;
+  contactPerson?: string;
+  companyWebsite?: string;
   education?: {
     id: string;
     degree: string;
@@ -194,6 +216,32 @@ export interface Company {
   openJobsCount: number;
   isVerified: boolean;
   isFollowing?: boolean;
+  cultureRating?: number;
+  workLifeRating?: number;
+  growthRating?: number;
+  compensationRating?: number;
+  featuredReview?: string;
+  tagline?: string;
+}
+
+export interface CompanyRating {
+  id: string;
+  companyName: string;
+  userId: string;
+  userName: string;
+  userRole?: string;
+  userAvatar?: string;
+  rating: number; // 1 to 5
+  cultureRating?: number;
+  workLifeRating?: number;
+  growthRating?: number;
+  compensationRating?: number;
+  reviewTitle: string;
+  reviewText: string;
+  pros?: string;
+  cons?: string;
+  recommendToFriend?: boolean;
+  createdAt: string;
 }
 
 // RAG (Retrieval-Augmented Generation) Interfaces
@@ -278,5 +326,21 @@ export interface AgentRunResult {
     };
   };
   source: string;
+}
+
+export interface ProfileViewEvent {
+  id: string;
+  userId: string;
+  viewerType: "Recruiter" | "Hiring Manager" | "Employer" | "Platform Visitor";
+  viewerName: string;
+  viewerCompany: string;
+  viewerRole: string;
+  viewerAvatar?: string;
+  source: string;
+  viewedAt: string;
+  durationSeconds?: number;
+  jobId?: string;
+  jobTitle?: string;
+  isVerifiedRecruiter?: boolean;
 }
 

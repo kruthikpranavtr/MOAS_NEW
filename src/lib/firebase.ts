@@ -44,8 +44,10 @@ export async function testConnection(): Promise<boolean> {
   }
 }
 
-// Initial boot ping
-testConnection().catch(console.error);
+// Initial boot ping with graceful fallback
+testConnection().catch((err) => {
+  console.warn("[Firestore Client] Initial test connection notice:", err?.message || err);
+});
 
 export function getFirestoreConnectionStatus() {
   return {

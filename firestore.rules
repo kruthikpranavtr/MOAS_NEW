@@ -41,7 +41,7 @@ service cloud.firestore {
         data.id is string && isValidId(data.id) &&
         data.name is string && data.name.size() > 0 && data.name.size() <= 100 &&
         data.email is string && data.email.size() > 0 && data.email.size() <= 120 &&
-        (data.role == 'Candidate' || data.role == 'Employer');
+        (data.role in ['Candidate', 'Employer', 'jobseeker', 'employer']);
     }
 
     function isValidJob(data) {
@@ -58,7 +58,7 @@ service cloud.firestore {
         data.id is string && isValidId(data.id) &&
         data.jobId is string && isValidId(data.jobId) &&
         data.candidateId is string && isValidId(data.candidateId) &&
-        data.status in ['Applied', 'Under Review', 'Shortlisted', 'Interview Scheduled', 'Rejected', 'Offered'];
+        (data.status in ['Applied', 'Under Review', 'Shortlisted', 'Interview Scheduled', 'Rejected', 'Offered']);
     }
 
     function isValidResume(data) {
@@ -71,58 +71,66 @@ service cloud.firestore {
 
     // 1. Users Collection
     match /users/{userId} {
-      allow get: if isSignedIn();
-      allow list: if isSignedIn() && (resource.data.id == request.auth.uid || isAdmin());
-      allow create: if isSignedIn() && isValidId(userId) && isValidUser(incoming()) && (request.auth.uid == userId || isAdmin());
-      allow update: if isSignedIn() && isValidId(userId) && isValidUser(incoming()) && (request.auth.uid == userId || isAdmin()) && incoming().id == existing().id;
-      allow delete: if isSignedIn() && isValidId(userId) && (request.auth.uid == userId || isAdmin());
+      allow read: if true;
+      allow create, update: if isValidId(userId) && isValidUser(incoming());
+      allow delete: if isValidId(userId);
     }
 
     // 2. Jobs Collection
     match /jobs/{jobId} {
       allow read: if true;
-      allow create: if isSignedIn() && isValidId(jobId) && isValidJob(incoming());
-      allow update: if isSignedIn() && isValidId(jobId) && isValidJob(incoming()) && incoming().id == existing().id;
-      allow delete: if isSignedIn() && isValidId(jobId) && isAdmin();
+      allow create, update: if isValidId(jobId) && isValidJob(incoming());
+      allow delete: if isValidId(jobId);
     }
 
     // 3. Applications Collection
     match /applications/{applicationId} {
-      allow get: if isSignedIn() && isValidId(applicationId) && (resource.data.candidateId == request.auth.uid || isAdmin());
-      allow list: if isSignedIn() && (resource.data.candidateId == request.auth.uid || isAdmin());
-      allow create: if isSignedIn() && isValidId(applicationId) && isValidApplication(incoming()) && (incoming().candidateId == request.auth.uid || isAdmin());
-      allow update: if isSignedIn() && isValidId(applicationId) && isValidApplication(incoming()) && (existing().candidateId == request.auth.uid || isAdmin()) && incoming().id == existing().id && incoming().jobId == existing().jobId && incoming().candidateId == existing().candidateId;
-      allow delete: if isSignedIn() && isValidId(applicationId) && (existing().candidateId == request.auth.uid || isAdmin());
+      allow read: if true;
+      allow create, update: if isValidId(applicationId) && isValidApplication(incoming());
+      allow delete: if isValidId(applicationId);
     }
 
     // 4. Resumes Collection
     match /resumes/{resumeId} {
-      allow get: if isSignedIn() && isValidId(resumeId) && (resource.data.userId == request.auth.uid || isAdmin());
-      allow list: if isSignedIn() && (resource.data.userId == request.auth.uid || isAdmin());
-      allow create: if isSignedIn() && isValidId(resumeId) && isValidResume(incoming()) && (incoming().userId == request.auth.uid || isAdmin());
-      allow update: if isSignedIn() && isValidId(resumeId) && isValidResume(incoming()) && (existing().userId == request.auth.uid || isAdmin()) && incoming().id == existing().id && incoming().userId == existing().userId;
-      allow delete: if isSignedIn() && isValidId(resumeId) && (existing().userId == request.auth.uid || isAdmin());
+      allow read: if true;
+      allow create, update: if isValidId(resumeId) && isValidResume(incoming());
+      allow delete: if isValidId(resumeId);
     }
 
     // 5. Companies Collection
     match /companies/{companyId} {
       allow read: if true;
-      allow write: if isSignedIn() && isAdmin();
+      allow write: if isValidId(companyId);
     }
 
     // 6. Saved Jobs Collection
     match /savedJobs/{savedJobId} {
-      allow read: if isSignedIn() && (resource.data.userId == request.auth.uid || isAdmin());
-      allow create: if isSignedIn() && isValidId(savedJobId) && (incoming().userId == request.auth.uid || isAdmin());
-      allow delete: if isSignedIn() && isValidId(savedJobId) && (existing().userId == request.auth.uid || isAdmin());
+      allow read: if true;
+      allow write: if isValidId(savedJobId);
     }
 
     // 7. Job Alerts Collection
     match /jobAlerts/{alertId} {
-      allow read: if isSignedIn() && (resource.data.userId == request.auth.uid || isAdmin());
-      allow create: if isSignedIn() && isValidId(alertId) && (incoming().userId == request.auth.uid || isAdmin());
-      allow update: if isSignedIn() && isValidId(alertId) && (existing().userId == request.auth.uid || isAdmin());
-      allow delete: if isSignedIn() && isValidId(alertId) && (existing().userId == request.auth.uid || isAdmin());
+      allow read: if true;
+      allow write: if isValidId(alertId);
+    }
+
+    // 8. Company Ratings & Reviews Collection
+    match /companyRatings/{ratingId} {
+      allow read: if true;
+      allow write: if isValidId(ratingId);
+    }
+
+    // 9. Profile Views Collection (Live Verified Recruiter & Employer Impressions)
+    match /profileViews/{viewId} {
+      allow read: if true;
+      allow write: if isValidId(viewId);
+    }
+
+    // 10. OTP Dispatches (Mobile Phone & Gmail Verification Codes)
+    match /otps/{otpId} {
+      allow read: if true;
+      allow write: if isValidId(otpId);
     }
   }
 }

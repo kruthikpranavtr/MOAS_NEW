@@ -10,6 +10,8 @@ import {
   UserCheck,
   UserPlus,
   AlertCircle,
+  XCircle,
+  ShieldAlert,
 } from "lucide-react";
 import { MoasLogo } from "../MoasLogo";
 import { RegisteredUser } from "../../types";
@@ -23,64 +25,98 @@ interface LoginViewProps {
 }
 
 export const LoginView: React.FC<LoginViewProps> = ({
-  initialEmail = "arun.kumar@email.com",
+  initialEmail = "",
   registeredUsers,
   onDirectLoginSuccess,
   onNewUserDetected,
   onNavigateRegister,
 }) => {
-  const [email, setEmail] = useState(initialEmail);
-  const [password, setPassword] = useState("••••••••");
+  const [identifier, setIdentifier] = useState(initialEmail);
+  const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [rememberMe, setRememberMe] = useState(true);
   const [isLoading, setIsLoading] = useState(false);
   const [routingStatus, setRoutingStatus] = useState<{
-    type: "existing" | "new";
+    type: "success" | "wrongPassword" | "notFound";
     message: string;
   } | null>(null);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!email.trim()) return;
+    const cleanIdentifier = identifier.trim().toLowerCase();
+    const cleanPassword = password.trim();
+
+    if (!cleanIdentifier) {
+      setRoutingStatus({
+        type: "notFound",
+        message: "Please enter your User ID, Username, or Email.",
+      });
+      return;
+    }
+
+    if (!cleanPassword) {
+      setRoutingStatus({
+        type: "wrongPassword",
+        message: "Please enter your account password.",
+      });
+      return;
+    }
 
     setIsLoading(true);
-    const cleanInput = email.trim().toLowerCase();
 
-    // Check if account already exists in registered accounts database
-    const existing = registeredUsers.find(
-      (u) =>
-        u.email.toLowerCase() === cleanInput ||
-        u.name.toLowerCase() === cleanInput
-    );
+    // 1. Search in registered accounts by User ID (e.g. MOAS-ID-84920), username, email, or full name
+    const existing = registeredUsers.find((u) => {
+      const idMatch = u.id?.toLowerCase() === cleanIdentifier;
+      const usernameMatch = u.username && u.username.toLowerCase() === cleanIdentifier;
+      const emailMatch = u.email?.toLowerCase() === cleanIdentifier;
+      const nameMatch = u.name?.toLowerCase() === cleanIdentifier;
+      return idMatch || usernameMatch || emailMatch || nameMatch;
+    });
 
     if (existing) {
-      // Existing User: Log in directly, bypassing registration and OTP
+      // 2. Validate Password
+      const expectedPassword = existing.password;
+
+      if (!expectedPassword || cleanPassword !== expectedPassword) {
+        // Password Incorrect
+        setTimeout(() => {
+          setIsLoading(false);
+          setRoutingStatus({
+            type: "wrongPassword",
+            message: "Incorrect password. Please verify your password and try again.",
+          });
+        }, 350);
+        return;
+      }
+
+      // Password Correct -> Direct Login with Role routing notification
+      const isEmployer =
+        existing.role?.toLowerCase() === "employer";
+      const targetDashboardName = isEmployer
+        ? "Employer Dashboard"
+        : "Job Seeker Dashboard";
+
       setRoutingStatus({
-        type: "existing",
-        message: `Existing account verified! Welcome back, ${existing.name}. Logging in directly...`,
+        type: "success",
+        message: `Credentials verified! Role: ${
+          isEmployer ? "Employer / Hiring Organization" : "Job Seeker / Candidate"
+        }. Welcome back, ${existing.name}. Redirecting to ${targetDashboardName}...`,
       });
 
       setTimeout(() => {
         setIsLoading(false);
         onDirectLoginSuccess(existing);
-      }, 450);
+      }, 500);
     } else {
-      // New User: Recognize they do not have an account and trigger registration + OTP flow
-      setRoutingStatus({
-        type: "new",
-        message: `No account found for "${email}". Redirecting to Account Creation & OTP verification...`,
-      });
-
+      // 3. User Not Found
       setTimeout(() => {
         setIsLoading(false);
-        onNewUserDetected(email.trim());
-      }, 550);
+        setRoutingStatus({
+          type: "notFound",
+          message: `No account found for "${identifier.trim()}". Please check your credentials or create a new account.`,
+        });
+      }, 400);
     }
-  };
-
-  const handleQuickPreset = (presetEmail: string) => {
-    setEmail(presetEmail);
-    setRoutingStatus(null);
   };
 
   return (
@@ -94,7 +130,7 @@ export const LoginView: React.FC<LoginViewProps> = ({
           </span>
         </div>
         <button
-          onClick={() => onNavigateRegister(email)}
+          onClick={() => onNavigateRegister(identifier)}
           className="text-xs sm:text-sm font-semibold text-teal-700 hover:text-teal-800 px-4 py-2 rounded-xl hover:bg-teal-50 border border-teal-200/80 transition-all cursor-pointer flex items-center gap-1.5"
         >
           <UserPlus className="w-3.5 h-3.5" />
@@ -123,6 +159,9 @@ export const LoginView: React.FC<LoginViewProps> = ({
                   Find Opportunities. <br />
                   <span className="text-teal-300">Build Your Future.</span>
                 </h1>
+                <p className="mt-4 text-sm text-slate-200 leading-relaxed max-w-md">
+                  Sign in with your verified MOAS User ID or username to access algorithmic job matching, active applications, and direct recruiter messages.
+                </p>
               </div>
             </div>
           </div>
@@ -133,55 +172,76 @@ export const LoginView: React.FC<LoginViewProps> = ({
               <div className="text-left">
                 <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-teal-50 border border-teal-200 text-teal-800 text-xs font-bold mb-3">
                   <UserCheck className="w-3.5 h-3.5 text-teal-600" />
-                  <span>Single Login Portal</span>
+                  <span>Secure Account Portal</span>
                 </div>
                 <h2 className="text-2xl sm:text-3xl font-bold text-slate-900">
                   Login to MOAS
                 </h2>
                 <p className="mt-2 text-sm text-slate-600 leading-normal">
-                  Enter your email to log in directly, or create a new verified account.
+                  Enter your User ID or Username and password to log in.
                 </p>
               </div>
 
-              {/* Status Alert Notification */}
+              {/* Status Alert Notifications */}
               {routingStatus && (
                 <div
                   className={`mt-5 p-3.5 rounded-2xl border text-xs font-medium flex items-start gap-2.5 transition-all ${
-                    routingStatus.type === "existing"
+                    routingStatus.type === "success"
                       ? "bg-emerald-50 border-emerald-200 text-emerald-900"
+                      : routingStatus.type === "wrongPassword"
+                      ? "bg-rose-50 border-rose-200 text-rose-900"
                       : "bg-amber-50 border-amber-200 text-amber-900"
                   }`}
                 >
-                  {routingStatus.type === "existing" ? (
+                  {routingStatus.type === "success" ? (
                     <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0 mt-0.5" />
+                  ) : routingStatus.type === "wrongPassword" ? (
+                    <XCircle className="w-4 h-4 text-rose-600 shrink-0 mt-0.5" />
                   ) : (
                     <AlertCircle className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
                   )}
-                  <span>{routingStatus.message}</span>
+                  <div className="flex-1">
+                    <span>{routingStatus.message}</span>
+                    {routingStatus.type === "notFound" && (
+                      <div className="mt-2">
+                        <button
+                          type="button"
+                          onClick={() => onNavigateRegister(identifier)}
+                          className="px-3 py-1 bg-amber-600 hover:bg-amber-700 text-white rounded-lg text-xs font-bold transition-all cursor-pointer inline-flex items-center gap-1"
+                        >
+                          <span>Create Account with "{identifier}"</span>
+                          <ArrowRight className="w-3 h-3" />
+                        </button>
+                      </div>
+                    )}
+                  </div>
                 </div>
               )}
 
               {/* Login Form */}
               <form onSubmit={handleSubmit} className="mt-6 space-y-4">
-                {/* Email / Username */}
+                {/* User ID / Username / Email */}
                 <div>
                   <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5">
-                    Email or Username
+                    User ID or Username
                   </label>
                   <div className="relative">
                     <Mail className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
                     <input
                       type="text"
-                      value={email}
+                      value={identifier}
                       onChange={(e) => {
-                        setEmail(e.target.value);
+                        setIdentifier(e.target.value);
                         if (routingStatus) setRoutingStatus(null);
                       }}
                       required
-                      placeholder="e.g. arun.kumar@email.com"
-                      className="w-full pl-10 pr-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-teal-500 focus:bg-white text-slate-800 transition-all placeholder-slate-400"
+                      placeholder="Enter your User ID, username, or email"
+                      className="w-full pl-10 pr-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-teal-500 focus:bg-white text-slate-800 transition-all placeholder-slate-400 font-medium"
                     />
                   </div>
+                  <p className="text-[11px] text-slate-500 mt-1 pl-1">
+                    Supports your <span className="font-semibold text-slate-700">User ID</span>, <span className="font-semibold text-slate-700">Username</span>, or registered email.
+                  </p>
                 </div>
 
                 {/* Password */}
@@ -192,21 +252,32 @@ export const LoginView: React.FC<LoginViewProps> = ({
                     </label>
                     <button
                       type="button"
-                      onClick={() => alert("Password reset link sent to registered email.")}
+                      onClick={() => alert("Password reset link sent to your registered email.")}
                       className="text-xs font-semibold text-teal-700 hover:text-teal-800 cursor-pointer"
                     >
                       Forgot Password?
                     </button>
                   </div>
                   <div className="relative">
-                    <Lock className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+                    <Lock
+                      className={`absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 ${
+                        routingStatus?.type === "wrongPassword" ? "text-rose-500" : "text-slate-400"
+                      }`}
+                    />
                     <input
                       type={showPassword ? "text" : "password"}
                       value={password}
-                      onChange={(e) => setPassword(e.target.value)}
+                      onChange={(e) => {
+                        setPassword(e.target.value);
+                        if (routingStatus?.type === "wrongPassword") setRoutingStatus(null);
+                      }}
                       required
                       placeholder="Enter your password"
-                      className="w-full pl-10 pr-11 py-3 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-teal-500 focus:bg-white text-slate-800 transition-all placeholder-slate-400"
+                      className={`w-full pl-10 pr-11 py-3 bg-slate-50 border rounded-xl text-sm focus:outline-none focus:ring-2 focus:bg-white text-slate-800 transition-all placeholder-slate-400 ${
+                        routingStatus?.type === "wrongPassword"
+                          ? "border-rose-400 focus:ring-rose-500 bg-rose-50/40"
+                          : "border-slate-200 focus:ring-teal-500"
+                      }`}
                     />
                     <button
                       type="button"
@@ -221,6 +292,12 @@ export const LoginView: React.FC<LoginViewProps> = ({
                       )}
                     </button>
                   </div>
+                  {routingStatus?.type === "wrongPassword" && (
+                    <p className="text-[11px] text-rose-600 font-semibold mt-1 pl-1 flex items-center gap-1">
+                      <ShieldAlert className="w-3.5 h-3.5 shrink-0" />
+                      <span>Password is incorrect. Please re-enter your password.</span>
+                    </p>
+                  )}
                 </div>
 
                 {/* Remember Me */}
@@ -255,67 +332,16 @@ export const LoginView: React.FC<LoginViewProps> = ({
                 </button>
               </form>
 
-              {/* Quick Testing Presets */}
-              <div className="mt-6 pt-5 border-t border-slate-100">
-                <div className="text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-2.5 flex items-center justify-between">
-                  <span>Quick Test Routing:</span>
-                  <span className="text-teal-700 font-semibold lowercase">click to test</span>
-                </div>
-                <div className="grid grid-cols-2 gap-2">
-                  <button
-                    type="button"
-                    onClick={() => handleQuickPreset("arun.kumar@email.com")}
-                    className={`px-3 py-2 rounded-xl text-left border text-xs font-semibold transition-all cursor-pointer ${
-                      email === "arun.kumar@email.com"
-                        ? "bg-teal-50 border-teal-300 text-teal-900"
-                        : "bg-slate-50 border-slate-200 text-slate-700 hover:bg-slate-100"
-                    }`}
-                  >
-                    <div className="flex items-center gap-1.5 text-emerald-700 font-bold">
-                      <span className="w-2 h-2 rounded-full bg-emerald-500" />
-                      <span>Existing User</span>
-                    </div>
-                    <div className="text-[11px] text-slate-500 truncate mt-0.5">
-                      arun.kumar@email.com
-                    </div>
-                    <div className="text-[10px] text-emerald-700 font-medium mt-1">
-                      Direct Login Bypass
-                    </div>
-                  </button>
-
-                  <button
-                    type="button"
-                    onClick={() => handleQuickPreset("priya.sharma@mltech.ai")}
-                    className={`px-3 py-2 rounded-xl text-left border text-xs font-semibold transition-all cursor-pointer ${
-                      email === "priya.sharma@mltech.ai"
-                        ? "bg-teal-50 border-teal-300 text-teal-900"
-                        : "bg-slate-50 border-slate-200 text-slate-700 hover:bg-slate-100"
-                    }`}
-                  >
-                    <div className="flex items-center gap-1.5 text-amber-700 font-bold">
-                      <span className="w-2 h-2 rounded-full bg-amber-500" />
-                      <span>New User</span>
-                    </div>
-                    <div className="text-[11px] text-slate-500 truncate mt-0.5">
-                      priya.sharma@mltech.ai
-                    </div>
-                    <div className="text-[10px] text-amber-700 font-medium mt-1">
-                      Triggers Register + OTP
-                    </div>
-                  </button>
-                </div>
-              </div>
-
               {/* Bottom Notice */}
-              <div className="mt-5 text-center">
+              <div className="mt-6 pt-5 border-t border-slate-100 text-center">
                 <p className="text-xs text-slate-500">
                   New to MOAS?{" "}
                   <button
                     type="button"
-                    onClick={() => onNavigateRegister(email)}
+                    onClick={() => onNavigateRegister(identifier)}
                     className="font-bold text-teal-700 hover:text-teal-800 underline cursor-pointer"
                   >
-                    Create your account directly
+                    Create account with username & strong password
                   </button>
                 </p>
               </div>

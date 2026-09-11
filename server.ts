@@ -24,14 +24,22 @@ import {
   saveResume,
   deleteResume,
   getCompanies,
+  getCompanyRatings,
+  saveCompanyRating,
+  getTopCompanies,
   getSavedJobs,
   toggleSavedJob,
   getJobAlerts,
   saveJobAlert,
   deleteJobAlert,
+  getProfileViews,
+  recordProfileView,
+  clearProfileViews,
   DBJob,
   DBApplication,
+  DBProfileView,
 } from "./server/db.js";
+import { getPostgresStatus, queryPostgres, pgGetProfileViews } from "./server/postgres.js";
 
 dotenv.config();
 
@@ -83,6 +91,48 @@ app.get("/api/db/status", async (req, res) => {
   try {
     const status = await getDatabaseStatus();
     res.json({ success: true, ...status });
+  } catch (error: any) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// PostgreSQL Database Engine Endpoints
+app.get("/api/db/postgres/status", async (req, res) => {
+  try {
+    const pgStatus = await getPostgresStatus();
+    res.json({ success: true, ...pgStatus });
+  } catch (error: any) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+app.post("/api/db/postgres/query", async (req, res) => {
+  try {
+    const { sql, params } = req.body;
+    if (!sql || typeof sql !== "string") {
+      return res.status(400).json({ success: false, error: "Valid SQL string is required." });
+    }
+    const result = await queryPostgres(sql, Array.isArray(params) ? params : []);
+    res.json({
+      success: true,
+      rows: result.rows,
+      rowCount: result.rows ? result.rows.length : result.affectedRows,
+      fields: result.fields ? result.fields.map((f: any) => f.name) : [],
+    });
+  } catch (error: any) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+app.get("/api/db/postgres/tables/:table", async (req, res) => {
+  try {
+    const allowed = ["jobs", "applications", "users", "companies", "profile_views", "company_ratings", "saved_jobs", "job_alerts"];
+    const table = req.params.table.toLowerCase();
+    if (!allowed.includes(table)) {
+      return res.status(400).json({ success: false, error: `Invalid table name. Allowed: ${allowed.join(", ")}` });
+    }
+    const result = await queryPostgres(`SELECT * FROM ${table} LIMIT 50`);
+    res.json({ success: true, table, count: result.rows.length, rows: result.rows });
   } catch (error: any) {
     res.status(500).json({ success: false, error: error.message });
   }
@@ -225,11 +275,99 @@ app.delete("/api/applications/:id", async (req, res) => {
   }
 });
 
-// 5. Companies Endpoints
+// 5. Companies & Ratings Endpoints
 app.get("/api/companies", async (req, res) => {
   try {
     const companies = await getCompanies();
     res.json({ success: true, count: companies.length, companies });
+  } catch (error: any) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+app.get("/api/moas/companies", async (req, res) => {
+  try {
+    const companies = await getCompanies();
+    res.json({ success: true, count: companies.length, companies });
+  } catch (error: any) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// Top Rated Companies Filter Endpoint
+app.get("/api/moas/top-companies", async (req, res) => {
+  try {
+    const minRating = Number(req.query.minRating) || 0;
+    const limitCount = Number(req.query.limit) || 50;
+    const topCompanies = await getTopCompanies(minRating, limitCount);
+    res.json({ success: true, count: topCompanies.length, companies: topCompanies });
+  } catch (error: any) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// Company Ratings & User Reviews
+app.get("/api/moas/ratings", async (req, res) => {
+  try {
+    const companyName = req.query.companyName as string | undefined;
+    const ratings = await getCompanyRatings(companyName);
+    res.json({ success: true, count: ratings.length, ratings });
+  } catch (error: any) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+app.post("/api/moas/ratings", async (req, res) => {
+  try {
+    const {
+      companyName,
+      userId,
+      userName,
+      userRole,
+      userAvatar,
+      rating,
+      cultureRating,
+      workLifeRating,
+      growthRating,
+      compensationRating,
+      reviewTitle,
+      reviewText,
+      pros,
+      cons,
+      recommendToFriend,
+    } = req.body;
+
+    if (!companyName || !rating) {
+      return res.status(400).json({ success: false, error: "companyName and rating (1-5) are required." });
+    }
+
+    const newRating = {
+      id: `rate-${Date.now()}`,
+      companyName: companyName.trim(),
+      userId: userId || "user-verified-candidate",
+      userName: userName || "Verified Candidate",
+      userRole: userRole || "Software Engineer",
+      userAvatar: userAvatar || "https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=100&h=100&fit=crop",
+      rating: Math.max(1, Math.min(5, Number(rating))),
+      cultureRating: cultureRating ? Math.max(1, Math.min(5, Number(cultureRating))) : Number(rating),
+      workLifeRating: workLifeRating ? Math.max(1, Math.min(5, Number(workLifeRating))) : Number(rating),
+      growthRating: growthRating ? Math.max(1, Math.min(5, Number(growthRating))) : Number(rating),
+      compensationRating: compensationRating ? Math.max(1, Math.min(5, Number(compensationRating))) : Number(rating),
+      reviewTitle: reviewTitle || `Experience with ${companyName}`,
+      reviewText: reviewText || "Strong technical culture with high engineering standards.",
+      pros: pros || "Great work environment and skilled peers",
+      cons: cons || "Fast-paced deliverables",
+      recommendToFriend: recommendToFriend !== undefined ? Boolean(recommendToFriend) : true,
+      createdAt: new Date().toISOString(),
+    };
+
+    const saved = await saveCompanyRating(newRating);
+    res.status(201).json({
+      success: true,
+      message: `Rating for ${companyName} submitted successfully and saved to Google Cloud Firestore.`,
+      rating: saved.rating,
+      updatedCompany: saved.company,
+    });
   } catch (error: any) {
     res.status(500).json({ success: false, error: error.message });
   }
@@ -297,6 +435,46 @@ app.delete("/api/alerts/:id", async (req, res) => {
     res.status(500).json({ success: false, error: error.message });
   }
 });
+
+// 8. Live Profile Views & Recruiter Audit Endpoints
+app.get("/api/moas/profile-views", async (req, res) => {
+  try {
+    const userId = (req.query.userId as string) || undefined;
+    const data = await getProfileViews(userId);
+    res.json({ success: true, ...data });
+  } catch (error: any) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+app.post("/api/moas/profile-views/record", async (req, res) => {
+  try {
+    const viewData = req.body || {};
+    const result = await recordProfileView(viewData);
+    res.json({
+      success: true,
+      message: "Live profile view registered and synchronized with Firestore.",
+      ...result,
+    });
+  } catch (error: any) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+app.post("/api/moas/profile-views/reset", async (req, res) => {
+  try {
+    const { userId } = req.body || {};
+    const result = await clearProfileViews(userId);
+    res.json({
+      success: true,
+      message: "Profile views reset to clean live tracking state.",
+      ...result,
+    });
+  } catch (error: any) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
 
 // MOAS AI Resume Analysis Endpoint
 app.post("/api/moas/ai-analyze-resume", async (req, res) => {
@@ -405,10 +583,18 @@ export interface ServerResumeItem {
 
 export interface ServerUserRecord {
   id: string;
+  username?: string;
+  password?: string;
   name: string;
   email: string;
   phone: string;
-  role: "Candidate" | "Employer";
+  role: "Candidate" | "Employer" | "jobseeker" | "employer";
+  companyName?: string;
+  companyEmail?: string;
+  industry?: string;
+  companySize?: string;
+  contactPerson?: string;
+  companyWebsite?: string;
   avatarUrl: string;
   location: string;
   quote?: string;
@@ -418,74 +604,162 @@ export interface ServerUserRecord {
   createdAt: string;
 }
 
-const SERVER_USERS: ServerUserRecord[] = [
-  {
-    id: "MOAS-ID-84920",
-    name: "Kruthik Pranav",
-    email: "kruthikpranav02@gmail.com",
-    phone: "+91 98450 12345",
-    role: "Candidate",
-    avatarUrl: "https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=400&h=400&fit=crop&crop=faces",
-    location: "Bangalore, India",
-    quote: "Building algorithmic frontiers and intelligent AI systems.",
-    aboutMe: "Senior Machine Learning & Full Stack Software Engineer focused on high-throughput ML pipelines, distributed architectures, and modern web applications.",
-    skills: ["TypeScript", "Python", "React.js", "PyTorch", "Node.js", "Machine Learning", "RAG", "Algorithms"],
-    resumes: [
-      {
-        id: "res-kp-1",
-        name: "Kruthik_Pranav_ML_AI_Engineer_CV.pdf",
-        size: "320 KB",
-        updatedAt: "Permanent Verified",
-        type: "PDF",
-        isPrimary: true,
-      },
-    ],
-    createdAt: "2024-01-15T08:00:00.000Z",
-  },
-  {
-    id: "MOAS-ID-10824",
-    name: "Arun Kumar",
-    email: "arun.kumar@email.com",
-    phone: "+91 98765 43210",
-    role: "Candidate",
-    avatarUrl: "https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&q=80&w=400",
-    location: "Bangalore, Karnataka, India",
-    quote: "Dream big, work smart, achieve more.",
-    aboutMe: "Passionate software developer with experience in building scalable web applications, machine learning workflows, and interactive user interfaces.",
-    skills: ["HTML", "CSS", "JavaScript", "React.js", "Node.js", "MySQL", "MongoDB", "Git", "REST API", "Python", "TypeScript"],
-    resumes: [
-      {
-        id: "res-1",
-        name: "Arun Kumar - Software Developer.docx",
-        size: "245 KB",
-        updatedAt: "20 May 2024, 10:30 AM",
-        type: "DOCX",
-        isPrimary: true,
-      },
-    ],
-    createdAt: "2024-07-01T10:00:00.000Z",
-  },
-];
+const SERVER_USERS: ServerUserRecord[] = [];
 
 // Get all permanent users
-app.get("/api/moas/users", (req, res) => {
-  res.json({
-    success: true,
-    users: SERVER_USERS,
-  });
+app.get("/api/moas/users", async (req, res) => {
+  try {
+    const dbUsers = await getUsers();
+    const testIds = new Set(["MOAS-ID-84920", "MOAS-ID-10824", "MOAS-ID-55019", "MOAS-ID-10482", "MOAS-ID-30941"]);
+    const cleanedDbUsers = dbUsers
+      .filter((u) => !testIds.has(u.id) && u.email !== "arun.kumar@email.com" && u.email !== "talent@techcorp.io")
+      .map((u) => ({
+        id: u.id,
+        username: u.username || u.id.toLowerCase(),
+        password: u.password,
+        name: u.name,
+        email: u.email,
+        phone: u.phone,
+        role: u.role,
+        companyName: u.companyName,
+        companyEmail: u.companyEmail,
+        industry: u.industry,
+        companySize: u.companySize,
+        contactPerson: u.contactPerson,
+        companyWebsite: u.companyWebsite,
+        avatarUrl: u.avatarUrl,
+        location: u.location,
+        quote: u.quote,
+        aboutMe: u.aboutMe,
+        skills: u.skills || [],
+        experienceLevel: u.experienceLevel,
+        education: u.education || [],
+        resumes: u.resumes || [],
+        createdAt: u.createdAt,
+        updatedAt: u.updatedAt,
+      }));
+
+    // Merge in-memory users that might not be in DB yet
+    const existingIds = new Set(cleanedDbUsers.map((u) => u.id));
+    const memoryOnly = SERVER_USERS.filter((u) => !existingIds.has(u.id));
+
+    res.json({
+      success: true,
+      users: [...cleanedDbUsers, ...memoryOnly],
+    });
+  } catch (e) {
+    res.json({
+      success: true,
+      users: SERVER_USERS,
+    });
+  }
+});
+
+// Get specific user by ID or Email
+app.get("/api/moas/users/:id", async (req, res) => {
+  try {
+    const { id } = req.params;
+    const user = await getUser(id);
+    if (user) {
+      return res.json({ success: true, user });
+    }
+    const memUser = SERVER_USERS.find(
+      (u) => u.id.toLowerCase() === id.toLowerCase() || u.email.toLowerCase() === id.toLowerCase()
+    );
+    if (memUser) {
+      return res.json({ success: true, user: memUser });
+    }
+    return res.status(404).json({ success: false, error: "User not found in storage" });
+  } catch (e: any) {
+    res.status(500).json({ success: false, error: e.message });
+  }
+});
+
+// Update user profile by ID
+app.put("/api/moas/users/:id", async (req, res) => {
+  try {
+    const { id } = req.params;
+    const updates = req.body;
+
+    let target = await getUser(id);
+    const existingIdx = SERVER_USERS.findIndex(
+      (u) => u.id.toLowerCase() === id.toLowerCase() || (u.email && u.email.toLowerCase() === id.toLowerCase())
+    );
+
+    const mergedData = {
+      id,
+      username: updates.username || target?.username || (existingIdx !== -1 ? SERVER_USERS[existingIdx].username : id.toLowerCase()),
+      password: updates.password || target?.password || (existingIdx !== -1 ? SERVER_USERS[existingIdx].password : "User@2026!"),
+      name: updates.name || target?.name || (existingIdx !== -1 ? SERVER_USERS[existingIdx].name : "User"),
+      email: updates.email || target?.email || (existingIdx !== -1 ? SERVER_USERS[existingIdx].email : ""),
+      phone: updates.phone || target?.phone || (existingIdx !== -1 ? SERVER_USERS[existingIdx].phone : ""),
+      role: updates.role || target?.role || (existingIdx !== -1 ? SERVER_USERS[existingIdx].role : "Candidate"),
+      companyName: updates.companyName !== undefined ? updates.companyName : (target?.companyName ?? (existingIdx !== -1 ? SERVER_USERS[existingIdx].companyName : undefined)),
+      companyEmail: updates.companyEmail !== undefined ? updates.companyEmail : (target?.companyEmail ?? (existingIdx !== -1 ? SERVER_USERS[existingIdx].companyEmail : undefined)),
+      industry: updates.industry !== undefined ? updates.industry : (target?.industry ?? (existingIdx !== -1 ? SERVER_USERS[existingIdx].industry : undefined)),
+      companySize: updates.companySize !== undefined ? updates.companySize : (target?.companySize ?? (existingIdx !== -1 ? SERVER_USERS[existingIdx].companySize : undefined)),
+      contactPerson: updates.contactPerson !== undefined ? updates.contactPerson : (target?.contactPerson ?? (existingIdx !== -1 ? SERVER_USERS[existingIdx].contactPerson : undefined)),
+      companyWebsite: updates.companyWebsite !== undefined ? updates.companyWebsite : (target?.companyWebsite ?? (existingIdx !== -1 ? SERVER_USERS[existingIdx].companyWebsite : undefined)),
+      avatarUrl: updates.avatarUrl || target?.avatarUrl || (existingIdx !== -1 ? SERVER_USERS[existingIdx].avatarUrl : ""),
+      location: updates.location || target?.location || (existingIdx !== -1 ? SERVER_USERS[existingIdx].location : ""),
+      quote: updates.quote !== undefined ? updates.quote : (target?.quote ?? (existingIdx !== -1 ? SERVER_USERS[existingIdx].quote : "")),
+      aboutMe: updates.aboutMe !== undefined ? updates.aboutMe : (target?.aboutMe ?? (existingIdx !== -1 ? SERVER_USERS[existingIdx].aboutMe : "")),
+      skills: updates.skills || target?.skills || (existingIdx !== -1 ? SERVER_USERS[existingIdx].skills : []),
+      experienceLevel: updates.experienceLevel || target?.experienceLevel,
+      education: updates.education || target?.education || [],
+      resumes: updates.resumes || target?.resumes || (existingIdx !== -1 ? SERVER_USERS[existingIdx].resumes : []),
+      createdAt: target?.createdAt || (existingIdx !== -1 ? SERVER_USERS[existingIdx].createdAt : new Date().toISOString()),
+      updatedAt: new Date().toISOString(),
+    };
+
+    if (existingIdx !== -1) {
+      SERVER_USERS[existingIdx] = { ...SERVER_USERS[existingIdx], ...mergedData };
+    } else {
+      SERVER_USERS.unshift(mergedData as ServerUserRecord);
+    }
+
+    const saved = await saveUser(mergedData as any);
+    return res.json({ success: true, user: saved, message: "Profile saved to Cloud Firestore and permanent storage." });
+  } catch (e: any) {
+    console.error("Error updating user:", e);
+    return res.status(500).json({ success: false, error: e.message });
+  }
 });
 
 // Upsert permanent user account (register or update)
-app.post("/api/moas/users", (req, res) => {
-  const { id, name, email, phone, role, avatarUrl, location, quote, aboutMe, skills, resumes } = req.body;
-  if (!email && !id) {
-    return res.status(400).json({ success: false, error: "Email or ID is required" });
+app.post("/api/moas/users", async (req, res) => {
+  const {
+    id,
+    username,
+    password,
+    name,
+    email,
+    phone,
+    role,
+    companyName,
+    companyEmail,
+    industry,
+    companySize,
+    contactPerson,
+    companyWebsite,
+    avatarUrl,
+    location,
+    quote,
+    aboutMe,
+    skills,
+    experienceLevel,
+    education,
+    resumes,
+  } = req.body;
+  if (!email && !id && !username) {
+    return res.status(400).json({ success: false, error: "Email, username, or ID is required" });
   }
 
   const existingIdx = SERVER_USERS.findIndex(
     (u) =>
       (email && u.email.toLowerCase() === email.toLowerCase()) ||
-      (id && u.id.toLowerCase() === id.toLowerCase())
+      (id && u.id.toLowerCase() === id.toLowerCase()) ||
+      (username && u.username && u.username.toLowerCase() === username.toLowerCase())
   );
 
   const permanentId = id || (existingIdx !== -1 ? SERVER_USERS[existingIdx].id : `MOAS-ID-${Math.floor(10000 + Math.random() * 90000)}`);
@@ -493,10 +767,18 @@ app.post("/api/moas/users", (req, res) => {
   if (existingIdx !== -1) {
     SERVER_USERS[existingIdx] = {
       ...SERVER_USERS[existingIdx],
+      username: username || SERVER_USERS[existingIdx].username,
+      password: password || SERVER_USERS[existingIdx].password,
       name: name || SERVER_USERS[existingIdx].name,
       email: email || SERVER_USERS[existingIdx].email,
       phone: phone || SERVER_USERS[existingIdx].phone,
       role: role || SERVER_USERS[existingIdx].role,
+      companyName: companyName !== undefined ? companyName : SERVER_USERS[existingIdx].companyName,
+      companyEmail: companyEmail !== undefined ? companyEmail : SERVER_USERS[existingIdx].companyEmail,
+      industry: industry !== undefined ? industry : SERVER_USERS[existingIdx].industry,
+      companySize: companySize !== undefined ? companySize : SERVER_USERS[existingIdx].companySize,
+      contactPerson: contactPerson !== undefined ? contactPerson : SERVER_USERS[existingIdx].contactPerson,
+      companyWebsite: companyWebsite !== undefined ? companyWebsite : SERVER_USERS[existingIdx].companyWebsite,
       avatarUrl: avatarUrl || SERVER_USERS[existingIdx].avatarUrl,
       location: location || SERVER_USERS[existingIdx].location,
       quote: quote !== undefined ? quote : SERVER_USERS[existingIdx].quote,
@@ -504,28 +786,48 @@ app.post("/api/moas/users", (req, res) => {
       skills: skills || SERVER_USERS[existingIdx].skills,
       resumes: resumes || SERVER_USERS[existingIdx].resumes,
     };
-    saveUser({
+    
+    await saveUser({
       id: SERVER_USERS[existingIdx].id,
+      username: SERVER_USERS[existingIdx].username,
+      password: SERVER_USERS[existingIdx].password,
       name: SERVER_USERS[existingIdx].name,
       email: SERVER_USERS[existingIdx].email,
       phone: SERVER_USERS[existingIdx].phone,
       role: SERVER_USERS[existingIdx].role,
+      companyName: SERVER_USERS[existingIdx].companyName,
+      companyEmail: SERVER_USERS[existingIdx].companyEmail,
+      industry: SERVER_USERS[existingIdx].industry,
+      companySize: SERVER_USERS[existingIdx].companySize,
+      contactPerson: SERVER_USERS[existingIdx].contactPerson,
+      companyWebsite: SERVER_USERS[existingIdx].companyWebsite,
       avatarUrl: SERVER_USERS[existingIdx].avatarUrl,
       location: SERVER_USERS[existingIdx].location,
       quote: SERVER_USERS[existingIdx].quote,
       aboutMe: SERVER_USERS[existingIdx].aboutMe,
       skills: SERVER_USERS[existingIdx].skills || [],
+      experienceLevel,
+      education,
+      resumes: SERVER_USERS[existingIdx].resumes || [],
       createdAt: SERVER_USERS[existingIdx].createdAt,
-    }).catch(console.error);
+    });
 
-    return res.json({ success: true, user: SERVER_USERS[existingIdx] });
+    return res.json({ success: true, user: SERVER_USERS[existingIdx], message: "User profile successfully saved to permanent storage." });
   } else {
     const newUser: ServerUserRecord = {
       id: permanentId,
+      username: username || permanentId.toLowerCase(),
+      password: password || "User@2026!",
       name: name || "New User",
       email: email || `${permanentId.toLowerCase()}@moas.internal`,
       phone: phone || "+91 98000 00000",
       role: role || "Candidate",
+      companyName,
+      companyEmail,
+      industry,
+      companySize,
+      contactPerson,
+      companyWebsite,
       avatarUrl: avatarUrl || "https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=400&h=400&fit=crop&crop=faces",
       location: location || "Bangalore, India",
       quote: quote || "Innovate, build, excel.",
@@ -536,21 +838,32 @@ app.post("/api/moas/users", (req, res) => {
     };
     SERVER_USERS.unshift(newUser);
 
-    saveUser({
+    await saveUser({
       id: newUser.id,
+      username: newUser.username,
+      password: newUser.password,
       name: newUser.name,
       email: newUser.email,
       phone: newUser.phone,
       role: newUser.role,
+      companyName: newUser.companyName,
+      companyEmail: newUser.companyEmail,
+      industry: newUser.industry,
+      companySize: newUser.companySize,
+      contactPerson: newUser.contactPerson,
+      companyWebsite: newUser.companyWebsite,
       avatarUrl: newUser.avatarUrl,
       location: newUser.location,
       quote: newUser.quote,
       aboutMe: newUser.aboutMe,
       skills: newUser.skills,
+      experienceLevel,
+      education,
+      resumes: newUser.resumes,
       createdAt: newUser.createdAt,
-    }).catch(console.error);
+    });
 
-    return res.json({ success: true, user: newUser });
+    return res.json({ success: true, user: newUser, message: "User registered and permanently saved to storage." });
   }
 });
 

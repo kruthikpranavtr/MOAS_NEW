@@ -20,7 +20,7 @@ import {
   X,
   Check,
 } from "lucide-react";
-import { Application, Job, JobAlert, NavigationState, UserProfile } from "../../types";
+import { Application, Job, JobAlert, NavigationState, UserProfile, ProfileViewEvent } from "../../types";
 
 interface DashboardViewProps {
   user: UserProfile;
@@ -28,12 +28,14 @@ interface DashboardViewProps {
   jobs: Job[];
   alerts?: JobAlert[];
   profileViews?: number;
+  viewEvents?: ProfileViewEvent[];
   onNavigate: (nav: NavigationState) => void;
   onSelectJob: (job: Job) => void;
   onToggleSaveJob: (jobId: string) => void;
   onUpdateUser?: (updated: UserProfile) => void;
   onUpdateApplicationStatus?: (appId: string, status: Application["status"]) => void;
   onQuickApplySample?: (count: number) => void;
+  onOpenLiveViewsModal?: () => void;
 }
 
 export const DashboardView: React.FC<DashboardViewProps> = ({
@@ -42,12 +44,14 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
   jobs,
   alerts = [],
   profileViews = 0,
+  viewEvents = [],
   onNavigate,
   onSelectJob,
   onToggleSaveJob,
   onUpdateUser,
   onUpdateApplicationStatus,
   onQuickApplySample,
+  onOpenLiveViewsModal,
 }) => {
   const [isEducationModalOpen, setIsEducationModalOpen] = useState(false);
   const [eduDegree, setEduDegree] = useState("");
@@ -281,14 +285,20 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
 
         {/* Profile Views */}
         <div
-          onClick={() => onNavigate("profile")}
-          className="p-5 bg-white border border-slate-200/80 rounded-2xl shadow-2xs hover:shadow-md hover:border-purple-500/40 transition-all cursor-pointer group"
+          onClick={() => (onOpenLiveViewsModal ? onOpenLiveViewsModal() : onNavigate("profile"))}
+          className="p-5 bg-white border border-slate-200/80 rounded-2xl shadow-2xs hover:shadow-md hover:border-emerald-500/50 transition-all cursor-pointer group relative overflow-hidden"
         >
           <div className="flex items-center justify-between">
-            <span className="text-xs font-bold text-slate-500 uppercase tracking-wider">
-              Profile Views
-            </span>
-            <div className="w-9 h-9 rounded-xl bg-purple-50 text-purple-700 flex items-center justify-center group-hover:scale-105 transition-transform">
+            <div className="flex items-center gap-1.5">
+              <span className="text-xs font-bold text-slate-500 uppercase tracking-wider">
+                Profile Views
+              </span>
+              <span className="inline-flex items-center gap-1 px-1.5 py-0.2 rounded-full text-[10px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200">
+                <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                Live
+              </span>
+            </div>
+            <div className="w-9 h-9 rounded-xl bg-emerald-50 text-emerald-700 flex items-center justify-center group-hover:scale-105 transition-transform">
               <Eye className="w-4.5 h-4.5" />
             </div>
           </div>
@@ -297,15 +307,18 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
               {profileViews}
             </span>
             {profileViews > 0 ? (
-              <span className="text-xs font-semibold text-purple-600 flex items-center">
+              <span className="text-xs font-semibold text-emerald-600 flex items-center">
                 <ArrowUpRight className="w-3.5 h-3.5" />
-                +{profileViews} Views
+                +{profileViews} Verified
               </span>
             ) : (
-              <span className="text-xs font-semibold text-slate-400">0 Views</span>
+              <span className="text-xs font-semibold text-slate-400">0 Live Views</span>
             )}
           </div>
-          <p className="text-[11px] text-slate-400 mt-1">Recruiter impressions</p>
+          <p className="text-[11px] text-slate-400 mt-1 flex items-center justify-between">
+            <span>Recruiter impressions</span>
+            <span className="text-emerald-700 font-semibold group-hover:underline text-[10px]">Live Audit →</span>
+          </p>
         </div>
 
         {/* Job Alerts */}

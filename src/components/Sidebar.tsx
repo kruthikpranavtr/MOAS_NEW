@@ -14,8 +14,10 @@ import {
   Headphones,
   Briefcase,
   Users,
+  ShieldCheck,
+  Award,
 } from "lucide-react";
-import { NavigationState } from "../types";
+import { NavigationState, UserProfile } from "../types";
 import { useLanguage } from "../context/LanguageContext";
 
 interface SidebarProps {
@@ -23,6 +25,7 @@ interface SidebarProps {
   onNavigate: (nav: NavigationState) => void;
   unreadMessagesCount: number;
   onLogout: () => void;
+  user?: UserProfile;
   savedJobsCount?: number;
   activeAlertsCount?: number;
   onOpenHelpModal?: () => void;
@@ -33,50 +36,150 @@ export const Sidebar: React.FC<SidebarProps> = ({
   onNavigate,
   unreadMessagesCount,
   onLogout,
+  user,
   savedJobsCount = 0,
   activeAlertsCount = 0,
   onOpenHelpModal,
 }) => {
   const { t } = useLanguage();
 
-  const mainNavItems = [
-    { label: t("nav.dashboard", "Dashboard"), state: "dashboard" as NavigationState, icon: LayoutDashboard },
-    { label: t("nav.findJobs", "Find Jobs"), state: "find-jobs" as NavigationState, icon: Search },
-    { label: "My Applications", state: "my-applications" as NavigationState, icon: FileText },
+  const isEmployer =
+    user?.role?.toLowerCase() === "employer";
+
+  // Job Seeker specific navigation
+  const seekerNavItems = [
+    {
+      label: t("nav.dashboard", "Dashboard"),
+      state: "dashboard/jobseeker" as NavigationState,
+      icon: LayoutDashboard,
+      match: ["dashboard", "dashboard/jobseeker"],
+    },
+    {
+      label: t("nav.findJobs", "Find Jobs"),
+      state: "find-jobs" as NavigationState,
+      icon: Search,
+      match: ["find-jobs"],
+    },
+    {
+      label: "Top Companies",
+      state: "top-companies" as NavigationState,
+      icon: Award,
+      match: ["top-companies"],
+    },
+    {
+      label: "My Applications",
+      state: "my-applications" as NavigationState,
+      icon: FileText,
+      match: ["my-applications"],
+    },
     {
       label: "Saved Jobs",
       state: "saved-jobs" as NavigationState,
       icon: Bookmark,
       badge: savedJobsCount > 0 ? savedJobsCount : undefined,
+      match: ["saved-jobs"],
     },
     {
       label: t("nav.jobAlerts", "Job Alerts"),
       state: "job-alerts" as NavigationState,
       icon: Bell,
       badge: activeAlertsCount > 0 ? activeAlertsCount : undefined,
+      match: ["job-alerts"],
     },
     {
       label: t("nav.messages", "Messages & AI"),
       state: "messages" as NavigationState,
       icon: MessageSquare,
       badge: unreadMessagesCount > 0 ? unreadMessagesCount : undefined,
+      match: ["messages"],
     },
-    { label: t("nav.resume", "Resume / CV"), state: "resume-cv" as NavigationState, icon: FileCheck2 },
-    { label: t("nav.profile", "Profile"), state: "profile" as NavigationState, icon: User },
-    { label: t("nav.settings", "Settings"), state: "settings" as NavigationState, icon: Settings },
+    {
+      label: t("nav.resume", "Resume / CV"),
+      state: "resume-cv" as NavigationState,
+      icon: FileCheck2,
+      match: ["resume-cv"],
+    },
+    {
+      label: t("nav.profile", "Profile"),
+      state: "profile" as NavigationState,
+      icon: User,
+      match: ["profile"],
+    },
+    {
+      label: t("nav.settings", "Settings"),
+      state: "settings" as NavigationState,
+      icon: Settings,
+      match: ["settings"],
+    },
   ];
 
+  // Employer specific navigation
   const employerNavItems = [
-    { label: t("nav.postJob", "Post a Job"), state: "post-job" as NavigationState, icon: Briefcase },
+    {
+      label: "Employer Dashboard",
+      state: "dashboard/employer" as NavigationState,
+      icon: LayoutDashboard,
+      match: ["dashboard", "dashboard/employer"],
+    },
+    {
+      label: t("nav.postJob", "Post a Job"),
+      state: "post-job" as NavigationState,
+      icon: Briefcase,
+      match: ["post-job"],
+    },
+    {
+      label: "Find Jobs & Talent",
+      state: "find-jobs" as NavigationState,
+      icon: Search,
+      match: ["find-jobs"],
+    },
+    {
+      label: "Top Companies",
+      state: "top-companies" as NavigationState,
+      icon: Award,
+      match: ["top-companies"],
+    },
+    {
+      label: t("nav.messages", "Candidate Chats"),
+      state: "messages" as NavigationState,
+      icon: MessageSquare,
+      badge: unreadMessagesCount > 0 ? unreadMessagesCount : undefined,
+      match: ["messages"],
+    },
+    {
+      label: "Company Profile",
+      state: "profile" as NavigationState,
+      icon: Building2,
+      match: ["profile"],
+    },
+    {
+      label: t("nav.settings", "Settings"),
+      state: "settings" as NavigationState,
+      icon: Settings,
+      match: ["settings"],
+    },
   ];
+
+  const activeNavItems = isEmployer ? employerNavItems : seekerNavItems;
 
   return (
     <aside className="w-64 shrink-0 hidden lg:flex flex-col justify-between py-6 px-4 bg-white border-r border-slate-200/80 min-h-[calc(100vh-4.5rem)]">
       <div className="space-y-6">
+        {/* Role Identity Tag */}
+        <div className="px-3.5 py-2 rounded-xl bg-slate-50 border border-slate-200/70 flex items-center justify-between text-xs">
+          <span className="font-bold text-slate-700 flex items-center gap-1.5">
+            {isEmployer ? <Building2 className="w-3.5 h-3.5 text-teal-600" /> : <User className="w-3.5 h-3.5 text-teal-600" />}
+            <span>{isEmployer ? "Employer Portal" : "Job Seeker Portal"}</span>
+          </span>
+          <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-teal-100/70 text-teal-800">
+            {isEmployer ? "Hiring" : "Candidate"}
+          </span>
+        </div>
+
         {/* Main Navigation List */}
         <div className="space-y-1">
-          {mainNavItems.map((item) => {
-            const isActive = currentNav === item.state;
+          {activeNavItems.map((item) => {
+            const isActive = item.match.includes(currentNav);
             const Icon = item.icon;
             return (
               <button
@@ -114,37 +217,6 @@ export const Sidebar: React.FC<SidebarProps> = ({
             <span>Logout</span>
           </button>
         </div>
-
-        {/* Employer Portal Section */}
-        <div className="pt-4 border-t border-slate-100">
-          <p className="px-3.5 text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">
-            For Employers
-          </p>
-          <div className="space-y-1">
-            {employerNavItems.map((item) => {
-              const isActive = currentNav === item.state;
-              const Icon = item.icon;
-              return (
-                <button
-                  key={item.state}
-                  onClick={() => onNavigate(item.state)}
-                  className={`w-full flex items-center gap-3 px-3.5 py-2 rounded-xl font-semibold text-sm transition-all cursor-pointer ${
-                    isActive
-                      ? "bg-teal-50 text-teal-800"
-                      : "text-slate-600 hover:text-slate-900 hover:bg-slate-50"
-                  }`}
-                >
-                  <Icon
-                    className={`w-4.5 h-4.5 ${
-                      isActive ? "text-teal-700" : "text-slate-400"
-                    }`}
-                  />
-                  <span>{item.label}</span>
-                </button>
-              );
-            })}
-          </div>
-        </div>
       </div>
 
       {/* Need Help Card */}
@@ -154,7 +226,9 @@ export const Sidebar: React.FC<SidebarProps> = ({
         </div>
         <h4 className="text-xs font-bold text-slate-800">Need Help?</h4>
         <p className="text-[11px] text-slate-500 mt-1 leading-normal">
-          Visit our Help Center or contact our 24/7 career support.
+          {isEmployer
+            ? "Connect with your employer success partner for talent search assistance."
+            : "Visit our Help Center or contact our 24/7 career support."}
         </p>
         <button
           onClick={onOpenHelpModal}

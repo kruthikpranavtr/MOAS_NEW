@@ -16,14 +16,20 @@ import { useLanguage } from "../../context/LanguageContext";
 
 interface SettingsViewProps {
   user: UserProfile;
+  onUpdateUser?: (updated: UserProfile) => void;
 }
 
-export const SettingsView: React.FC<SettingsViewProps> = ({ user }) => {
+export const SettingsView: React.FC<SettingsViewProps> = ({ user, onUpdateUser }) => {
   const { currentLanguage, setLanguage, supportedLanguages, t } = useLanguage();
 
   const [activeTab, setActiveTab] = useState<
     "account" | "language" | "notifications" | "privacy" | "billing"
   >("account");
+
+  const [name, setName] = useState(user.name);
+  const [email, setEmail] = useState(user.email);
+  const [phone, setPhone] = useState(user.phone || "");
+  const [location, setLocation] = useState(user.location || "");
 
   const [emailAlerts, setEmailAlerts] = useState(true);
   const [smsAlerts, setSmsAlerts] = useState(false);
@@ -33,6 +39,15 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ user }) => {
 
   const handleSave = (e: React.FormEvent) => {
     e.preventDefault();
+    if (onUpdateUser) {
+      onUpdateUser({
+        ...user,
+        name,
+        email,
+        phone,
+        location,
+      });
+    }
     setSavedSuccess(true);
     setTimeout(() => setSavedSuccess(false), 3000);
   };
@@ -179,8 +194,9 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ user }) => {
                     </label>
                     <input
                       type="text"
-                      defaultValue={user.name}
-                      className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-800"
+                      value={name}
+                      onChange={(e) => setName(e.target.value)}
+                      className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-800 focus:outline-none focus:border-teal-600"
                     />
                   </div>
 
@@ -190,8 +206,9 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ user }) => {
                     </label>
                     <input
                       type="email"
-                      defaultValue={user.email}
-                      className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-800"
+                      value={email}
+                      onChange={(e) => setEmail(e.target.value)}
+                      className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-800 focus:outline-none focus:border-teal-600"
                     />
                   </div>
 
@@ -201,8 +218,9 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ user }) => {
                     </label>
                     <input
                       type="tel"
-                      defaultValue={user.phone}
-                      className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-800"
+                      value={phone}
+                      onChange={(e) => setPhone(e.target.value)}
+                      className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-800 focus:outline-none focus:border-teal-600"
                     />
                   </div>
 
@@ -212,8 +230,9 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ user }) => {
                     </label>
                     <input
                       type="text"
-                      defaultValue={user.location}
-                      className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-800"
+                      value={location}
+                      onChange={(e) => setLocation(e.target.value)}
+                      className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-800 focus:outline-none focus:border-teal-600"
                     />
                   </div>
                 </div>
