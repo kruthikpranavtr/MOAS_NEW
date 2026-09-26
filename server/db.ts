@@ -45,6 +45,7 @@ export interface DBJob {
   postedDate: string;
   workMode?: string;
   logoUrl?: string;
+  logo?: string;
   applicantCount?: number;
 }
 
