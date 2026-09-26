@@ -163,16 +163,16 @@ export const Sidebar: React.FC<SidebarProps> = ({
   const activeNavItems = isEmployer ? employerNavItems : seekerNavItems;
 
   return (
-    <aside className="w-64 shrink-0 hidden lg:flex flex-col justify-between py-6 px-4 bg-white border-r border-slate-200/80 min-h-[calc(100vh-4.5rem)]">
+    <aside className="w-full shrink-0 flex flex-col justify-between py-5 px-4 bg-[#0B1120]/80 border border-white/[0.08] rounded-2xl backdrop-blur-xl shadow-xl">
       <div className="space-y-6">
         {/* Role Identity Tag */}
-        <div className="px-3.5 py-2 rounded-xl bg-slate-50 border border-slate-200/70 flex items-center justify-between text-xs">
-          <span className="font-bold text-slate-700 flex items-center gap-1.5">
-            {isEmployer ? <Building2 className="w-3.5 h-3.5 text-teal-600" /> : <User className="w-3.5 h-3.5 text-teal-600" />}
-            <span>{isEmployer ? "Employer Portal" : "Job Seeker Portal"}</span>
+        <div className="px-3.5 py-2 rounded-xl bg-slate-900/70 border border-white/10 flex items-center justify-between text-xs">
+          <span className="font-bold text-slate-200 flex items-center gap-1.5 font-mono">
+            {isEmployer ? <Building2 className="w-3.5 h-3.5 text-cyan-400" /> : <User className="w-3.5 h-3.5 text-cyan-400" />}
+            <span>{isEmployer ? "Employer Portal" : "Candidate Portal"}</span>
           </span>
-          <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-teal-100/70 text-teal-800">
-            {isEmployer ? "Hiring" : "Candidate"}
+          <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-cyan-950/60 text-cyan-300 border border-cyan-500/30 font-mono">
+            {isEmployer ? "Hiring" : "Talent"}
           </span>
         </div>
 
@@ -187,20 +187,20 @@ export const Sidebar: React.FC<SidebarProps> = ({
                 onClick={() => onNavigate(item.state)}
                 className={`w-full flex items-center justify-between px-3.5 py-2.5 rounded-xl font-semibold text-sm transition-all cursor-pointer ${
                   isActive
-                    ? "bg-teal-50 text-teal-800 shadow-xs"
-                    : "text-slate-600 hover:text-slate-900 hover:bg-slate-50"
+                    ? "bg-cyan-500/10 text-cyan-300 border border-cyan-500/30 shadow-[0_0_15px_rgba(6,182,212,0.15)] font-bold"
+                    : "text-slate-400 hover:text-white hover:bg-white/[0.05]"
                 }`}
               >
                 <div className="flex items-center gap-3">
                   <Icon
                     className={`w-5 h-5 ${
-                      isActive ? "text-teal-700" : "text-slate-400 group-hover:text-slate-600"
+                      isActive ? "text-cyan-400" : "text-slate-500 group-hover:text-slate-300"
                     }`}
                   />
                   <span>{item.label}</span>
                 </div>
                 {item.badge !== undefined && (
-                  <span className="px-2 py-0.5 text-xs font-bold bg-teal-600 text-white rounded-full">
+                  <span className="px-2 py-0.5 text-xs font-bold bg-cyan-500 text-slate-950 rounded-full font-mono">
                     {item.badge}
                   </span>
                 )}
@@ -211,30 +211,30 @@ export const Sidebar: React.FC<SidebarProps> = ({
           {/* Logout button */}
           <button
             onClick={onLogout}
-            className="w-full flex items-center gap-3 px-3.5 py-2.5 rounded-xl font-semibold text-sm text-slate-600 hover:text-red-600 hover:bg-red-50 transition-all cursor-pointer"
+            className="w-full flex items-center gap-3 px-3.5 py-2.5 rounded-xl font-semibold text-sm text-slate-400 hover:text-red-400 hover:bg-red-500/10 transition-all cursor-pointer"
           >
-            <LogOut className="w-5 h-5 text-slate-400" />
+            <LogOut className="w-5 h-5 text-slate-500" />
             <span>Logout</span>
           </button>
         </div>
       </div>
 
       {/* Need Help Card */}
-      <div className="mt-6 p-4 bg-slate-50 border border-slate-200/70 rounded-2xl text-center">
-        <div className="w-10 h-10 mx-auto rounded-full bg-teal-100 text-teal-700 flex items-center justify-center mb-2 shadow-2xs">
+      <div className="mt-6 p-4 bg-slate-900/60 border border-white/10 rounded-2xl text-center">
+        <div className="w-10 h-10 mx-auto rounded-full bg-cyan-950/60 border border-cyan-500/30 text-cyan-400 flex items-center justify-center mb-2 shadow-2xs">
           <Headphones className="w-5 h-5" />
         </div>
-        <h4 className="text-xs font-bold text-slate-800">Need Help?</h4>
-        <p className="text-[11px] text-slate-500 mt-1 leading-normal">
+        <h4 className="text-xs font-bold text-slate-200">Architecture Support</h4>
+        <p className="text-[11px] text-slate-400 mt-1 leading-normal">
           {isEmployer
-            ? "Connect with your employer success partner for talent search assistance."
-            : "Visit our Help Center or contact our 24/7 career support."}
+            ? "Connect with your talent partner for automated engineering sourcing assistance."
+            : "Review technical architecture guidelines or contact our 24/7 engineer support."}
         </p>
         <button
           onClick={onOpenHelpModal}
-          className="mt-3 w-full py-1.5 px-3 bg-white hover:bg-slate-100 border border-slate-200 text-teal-700 rounded-xl text-xs font-bold transition-colors cursor-pointer"
+          className="mt-3 w-full py-1.5 px-3 bg-white/5 hover:bg-white/10 border border-white/10 text-cyan-300 rounded-xl text-xs font-bold transition-colors cursor-pointer font-mono"
         >
-          Go to Help Center
+          Open Support Center
         </button>
       </div>
     </aside>
