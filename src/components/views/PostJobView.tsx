@@ -235,10 +235,14 @@ export const PostJobView: React.FC<PostJobViewProps> = ({ onJobPublished, defaul
                     onChange={(e) => setEmploymentType(e.target.value)}
                     className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-teal-500 text-slate-700"
                   >
-                    <option>Full Time</option>
-                    <option>Part Time</option>
-                    <option>Contract</option>
-                    <option>Internship</option>
+                    <option value="Full Time">Full Time Corporate</option>
+                    <option value="Daily Wage">Daily Wage / Daily Shift</option>
+                    <option value="Small Task">Small Task / Quick Gig</option>
+                    <option value="Skilled Trade">Skilled Trade & Service</option>
+                    <option value="Freelance">Freelance / Contract</option>
+                    <option value="Part Time">Part Time</option>
+                    <option value="Internship">Internship</option>
+                    <option value="Trainee">Apprentice / Trainee</option>
                   </select>
                 </div>
 

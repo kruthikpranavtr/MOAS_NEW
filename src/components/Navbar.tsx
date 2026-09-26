@@ -18,6 +18,8 @@ import { NavigationState, UserProfile, AppNotification, LanguageCode } from "../
 import { MoasLogo } from "./MoasLogo";
 import { useLanguage } from "../context/LanguageContext";
 import { DatabaseStatusBadge } from "./DatabaseStatusBadge";
+import { getInitialsAvatar } from "../data/mockData";
+
 
 interface NavbarProps {
   currentNav: NavigationState;
@@ -359,7 +361,7 @@ export const Navbar: React.FC<NavbarProps> = ({
               className="flex items-center gap-2.5 pl-2 pr-1.5 py-1 hover:bg-slate-100 rounded-full transition-colors cursor-pointer focus:outline-none"
             >
               <img
-                src={user.avatarUrl}
+                src={user.avatarUrl && !user.avatarUrl.includes("name=User") ? user.avatarUrl : getInitialsAvatar(user.name)}
                 alt={user.name}
                 referrerPolicy="no-referrer"
                 className="w-9 h-9 rounded-full object-cover border-2 border-teal-600/30"
@@ -369,6 +371,7 @@ export const Navbar: React.FC<NavbarProps> = ({
               </span>
               <ChevronDown className="w-4 h-4 text-slate-500" />
             </button>
+
 
             {/* Profile Dropdown */}
             {profileDropdownOpen && (

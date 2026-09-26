@@ -28,6 +28,8 @@ import {
 } from "lucide-react";
 import { Application, Job, NavigationState, UserProfile, ProfileViewEvent } from "../../types";
 import { PhotoUploadModal } from "../modals/PhotoUploadModal";
+import { getInitialsAvatar } from "../../data/mockData";
+
 
 interface ProfileViewProps {
   user: UserProfile;
@@ -194,11 +196,12 @@ export const ProfileView: React.FC<ProfileViewProps> = ({
             <div className="flex items-end gap-4">
               <div className="relative">
                 <img
-                  src={user.avatarUrl}
+                  src={user.avatarUrl && !user.avatarUrl.includes("name=User") ? user.avatarUrl : getInitialsAvatar(user.name)}
                   alt={user.name}
                   referrerPolicy="no-referrer"
                   className="w-24 h-24 sm:w-28 sm:h-28 rounded-2xl object-cover border-4 border-white shadow-md bg-slate-100"
                 />
+
                 <button
                   onClick={() => setIsPhotoModalOpen(true)}
                   className="absolute -bottom-1 -right-1 p-1.5 bg-teal-700 hover:bg-teal-800 text-white rounded-xl shadow-md cursor-pointer transition-transform hover:scale-105"

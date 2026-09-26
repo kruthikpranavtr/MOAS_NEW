@@ -112,7 +112,14 @@ export default function App() {
     if (saved) {
       try {
         const parsed = JSON.parse(saved);
-        if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          const existingIds = new Set(parsed.map((j: Job) => j.id));
+          const missingInitial = initialJobs.filter((j) => !existingIds.has(j.id));
+          if (missingInitial.length > 0) {
+            return [...parsed, ...missingInitial];
+          }
+          return parsed;
+        }
       } catch (e) {
         console.error(e);
       }
@@ -256,8 +263,10 @@ export default function App() {
 
       // 1. Live jobs
       if (jobsData?.success && Array.isArray(jobsData.jobs) && jobsData.jobs.length > 0) {
-        const mappedJobs: Job[] = jobsData.jobs.map((dbJob: any, index: number) => {
+        const mappedBackendJobs: Job[] = jobsData.jobs.map((dbJob: any, index: number) => {
+          const initialMatch = initialJobs.find((ij) => ij.id === dbJob.id);
           const fallbackLogo =
+            initialMatch?.logo ||
             initialJobs[index % initialJobs.length]?.logo ||
             "https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?w=100&h=100&fit=crop";
           return {
@@ -267,23 +276,28 @@ export default function App() {
             logo: dbJob.logo || fallbackLogo,
             verified: dbJob.isVerified ?? true,
             location: dbJob.location,
-            employmentType: (dbJob.type as any) || "Full Time",
-            workMode: (dbJob.workMode as any) || "Hybrid",
-            experience: dbJob.experience || "1-3 years",
-            salaryMin: 80000,
-            salaryMax: 160000,
-            salaryText: dbJob.salaryText || dbJob.salary || "Competitive",
-            postedTime: dbJob.postedDate || "Recently",
-            tags: dbJob.tags || ["Machine Learning", "Algorithms"],
-            description: dbJob.description || "",
-            requirements: dbJob.requirements || [],
-            isFeatured: index < 2,
+            employmentType: (dbJob.type || dbJob.employmentType || initialMatch?.employmentType || "Full Time") as any,
+            workMode: (dbJob.workMode || initialMatch?.workMode || "Hybrid") as any,
+            experience: dbJob.experience || initialMatch?.experience || "1-3 years",
+            salaryMin: initialMatch?.salaryMin || dbJob.salaryMin || 10,
+            salaryMax: initialMatch?.salaryMax || dbJob.salaryMax || 25,
+            salaryText: dbJob.salaryText || dbJob.salary || initialMatch?.salaryText || "Competitive",
+            postedTime: dbJob.postedDate || initialMatch?.postedTime || "Recently",
+            tags: dbJob.tags || initialMatch?.tags || ["Service", "Operations"],
+            description: dbJob.description || initialMatch?.description || "",
+            requirements: dbJob.requirements || initialMatch?.requirements || [],
+            isFeatured: dbJob.isFeatured ?? initialMatch?.isFeatured ?? (index < 3),
             isNew: true,
             isSaved: false,
-            matchScore: 92,
+            matchScore: initialMatch?.matchScore || (90 + (index % 8)),
           };
         });
-        setJobs(mappedJobs);
+
+        // Merge initialJobs missing from backend to guarantee full coverage of all local/trade/daily/freelance jobs
+        const existingBackendIds = new Set(mappedBackendJobs.map((j) => j.id));
+        const missingInitial = initialJobs.filter((j) => !existingBackendIds.has(j.id));
+        const finalJobs = [...mappedBackendJobs, ...missingInitial];
+        setJobs(finalJobs);
       }
 
       // 2. Applications

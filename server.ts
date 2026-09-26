@@ -1488,6 +1488,178 @@ app.post("/api/moas/agent-run", async (req, res) => {
   }
 });
 
+// ==========================================
+// TEXTBEE SMS OTP VERIFICATION ENDPOINTS
+// ==========================================
+
+// In-memory OTP store: phone -> { otp, expiresAt, attempts }
+const otpStore = new Map<string, { otp: string; expiresAt: number; attempts: number }>();
+
+// Generate a cryptographically-ish random 6-digit OTP
+function generateOtp(): string {
+  return Math.floor(100000 + Math.random() * 900000).toString();
+}
+
+// Normalize phone number: strip spaces, ensure + prefix for international
+function normalizePhone(phone: string): string {
+  let cleaned = phone.replace(/[\s\-()]/g, "");
+  if (!cleaned.startsWith("+")) {
+    // Assume Indian number if no country code
+    if (cleaned.startsWith("0")) cleaned = cleaned.slice(1);
+    if (cleaned.length === 10) cleaned = "+91" + cleaned;
+  }
+  return cleaned;
+}
+
+// POST /api/otp/send — Generate OTP and send via TextBee SMS
+app.post("/api/otp/send", async (req, res) => {
+  try {
+    const { phone } = req.body;
+    if (!phone || typeof phone !== "string" || phone.trim().length < 10) {
+      return res.status(400).json({ success: false, error: "A valid phone number is required." });
+    }
+
+    const normalizedPhone = normalizePhone(phone.trim());
+    const otp = generateOtp();
+    const OTP_TTL_MS = 5 * 60 * 1000; // 5 minutes
+
+    // Store the OTP
+    otpStore.set(normalizedPhone, {
+      otp,
+      expiresAt: Date.now() + OTP_TTL_MS,
+      attempts: 0,
+    });
+
+    // Send SMS via TextBee
+    const TEXTBEE_API_KEY = process.env.TEXTBEE_API_KEY;
+    const TEXTBEE_DEVICE_ID = process.env.TEXTBEE_DEVICE_ID;
+
+    if (!TEXTBEE_API_KEY || !TEXTBEE_DEVICE_ID) {
+      console.warn("[OTP] TextBee credentials not configured. OTP generated but not sent via SMS.");
+      return res.json({
+        success: true,
+        smsSent: false,
+        message: "OTP generated (SMS gateway not configured). OTP for testing: " + otp,
+        otp, // Only expose in dev/fallback mode
+      });
+    }
+
+    const smsBody = `[MOAS] Your verification code is: ${otp}. This code expires in 5 minutes. Do not share this code with anyone.`;
+
+    console.log(`[OTP] Sending OTP ${otp} to ${normalizedPhone} via TextBee...`);
+
+    const textbeeResponse = await fetch("https://api.textbee.dev/api/v1/gateway/send-sms", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "x-api-key": TEXTBEE_API_KEY,
+      },
+      body: JSON.stringify({
+        deviceId: TEXTBEE_DEVICE_ID,
+        recipients: [normalizedPhone],
+        message: smsBody,
+      }),
+    });
+
+    const textbeeResult = await textbeeResponse.json();
+    console.log("[OTP] TextBee API response:", JSON.stringify(textbeeResult, null, 2));
+
+    if (!textbeeResponse.ok) {
+      console.error("[OTP] TextBee SMS send failed:", textbeeResult);
+      return res.json({
+        success: true,
+        smsSent: false,
+        message: "OTP generated but SMS delivery failed. Use the code shown on screen.",
+        otp, // Fallback: show OTP to user
+        textbeeError: textbeeResult,
+      });
+    }
+
+    return res.json({
+      success: true,
+      smsSent: true,
+      message: `OTP sent successfully to ${normalizedPhone} via SMS.`,
+      // In production, never expose the OTP in the response.
+      // For this demo/dev environment, we include it as a fallback.
+      otp,
+      textbeeResult,
+    });
+  } catch (error: any) {
+    console.error("[OTP] Error sending OTP:", error);
+    return res.status(500).json({
+      success: false,
+      error: "Failed to send OTP.",
+      message: error.message,
+    });
+  }
+});
+
+// POST /api/otp/verify — Verify the OTP entered by the user
+app.post("/api/otp/verify", async (req, res) => {
+  try {
+    const { phone, otp } = req.body;
+    if (!phone || !otp) {
+      return res.status(400).json({ success: false, error: "Phone number and OTP are required." });
+    }
+
+    const normalizedPhone = normalizePhone(phone.trim());
+    const stored = otpStore.get(normalizedPhone);
+
+    if (!stored) {
+      return res.status(400).json({
+        success: false,
+        error: "No OTP was generated for this number. Please request a new one.",
+      });
+    }
+
+    // Check expiry
+    if (Date.now() > stored.expiresAt) {
+      otpStore.delete(normalizedPhone);
+      return res.status(400).json({
+        success: false,
+        error: "OTP has expired. Please request a new one.",
+      });
+    }
+
+    // Check max attempts
+    if (stored.attempts >= 5) {
+      otpStore.delete(normalizedPhone);
+      return res.status(429).json({
+        success: false,
+        error: "Too many failed attempts. Please request a new OTP.",
+      });
+    }
+
+    // Verify
+    stored.attempts += 1;
+
+    if (otp.trim() === stored.otp) {
+      otpStore.delete(normalizedPhone); // One-time use
+      console.log(`[OTP] Verification SUCCESS for ${normalizedPhone}`);
+      return res.json({
+        success: true,
+        verified: true,
+        message: "OTP verified successfully!",
+      });
+    } else {
+      console.log(`[OTP] Verification FAILED for ${normalizedPhone} — attempt ${stored.attempts}/5`);
+      return res.json({
+        success: true,
+        verified: false,
+        attemptsRemaining: 5 - stored.attempts,
+        message: `Incorrect OTP. ${5 - stored.attempts} attempts remaining.`,
+      });
+    }
+  } catch (error: any) {
+    console.error("[OTP] Error verifying OTP:", error);
+    return res.status(500).json({
+      success: false,
+      error: "Failed to verify OTP.",
+      message: error.message,
+    });
+  }
+});
+
 // Setup Vite middleware in dev or static files in prod
 async function setupVite() {
   if (process.env.NODE_ENV !== "production") {

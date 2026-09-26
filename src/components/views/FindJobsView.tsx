@@ -120,11 +120,21 @@ export const FindJobsView: React.FC<FindJobsViewProps> = ({
       }
 
       // Job Type match
-      if (!selectedJobTypes.includes("All")) {
-        if (!selectedJobTypes.includes(job.employmentType)) {
-          return false;
-        }
+      if (!selectedJobTypes.includes("All") && !selectedJobTypes.includes("All Job Types")) {
+        const matchesType = selectedJobTypes.some((typeVal) => {
+          const t = typeVal.toLowerCase();
+          const emp = (job.employmentType || "").toLowerCase();
+          if (t.includes("daily") || t.includes("small") || t.includes("gig")) return emp.includes("small") || emp.includes("daily") || emp.includes("task") || emp.includes("gig");
+          if (t.includes("trade") || t.includes("skilled") || t.includes("service")) return emp.includes("skilled") || emp.includes("trade") || emp.includes("service") || emp.includes("maintenance");
+          if (t.includes("part") || t.includes("freelance")) return emp.includes("part") || emp.includes("freelance");
+          if (t.includes("full")) return emp.includes("full");
+          if (t.includes("contract")) return emp.includes("contract");
+          if (t.includes("intern") || t.includes("trainee") || t.includes("apprentice")) return emp.includes("intern") || emp.includes("trainee") || emp.includes("apprentice");
+          return emp.includes(t);
+        });
+        if (!matchesType) return false;
       }
+
 
       // Salary Filter
       if (salaryFilter === "₹6-12 LPA" && (job.salaryMin > 12 || job.salaryMax < 6)) {
@@ -277,25 +287,27 @@ export const FindJobsView: React.FC<FindJobsViewProps> = ({
             {/* Job Type */}
             <div>
               <h4 className="text-xs font-bold text-slate-700 uppercase tracking-wider mb-2.5">
-                Job Type
+                Job / Work Type
               </h4>
-              <div className="space-y-2">
+              <div className="flex flex-col space-y-2.5 w-full">
                 {[
                   "All Job Types",
-                  "Full Time",
-                  "Part Time",
-                  "Contract",
-                  "Internship",
+                  "Daily Wage & Small Gigs",
+                  "Skilled Trade & Services",
+                  "Part Time & Freelance",
+                  "Full Time Corporate",
+                  "Contract & Remote",
+                  "Internship & Trainee",
                 ].map((type) => {
                   const val = type === "All Job Types" ? "All" : type;
                   const isChecked = selectedJobTypes.includes(val);
                   return (
-                    <label key={type} className="flex items-center gap-2.5 cursor-pointer text-xs text-slate-700">
+                    <label key={type} className="flex items-center gap-2.5 cursor-pointer text-xs font-medium text-slate-700 hover:text-slate-900 w-full select-none">
                       <input
                         type="checkbox"
                         checked={isChecked}
                         onChange={() => handleJobTypeToggle(val)}
-                        className="w-4 h-4 rounded border-slate-300 text-teal-600 focus:ring-teal-500"
+                        className="w-4 h-4 rounded border-slate-300 text-teal-600 focus:ring-teal-500 shrink-0"
                       />
                       <span>{type}</span>
                     </label>
@@ -303,6 +315,7 @@ export const FindJobsView: React.FC<FindJobsViewProps> = ({
                 })}
               </div>
             </div>
+
 
             {/* Experience Level */}
             <div>
@@ -419,6 +432,33 @@ export const FindJobsView: React.FC<FindJobsViewProps> = ({
 
         {/* Right Job Cards Column */}
         <div className="lg:col-span-8 xl:col-span-9 space-y-4">
+          {/* Quick Category & Work Type Filters Bar */}
+          <div className="flex items-center gap-2 overflow-x-auto pb-1 scrollbar-none">
+            {[
+              { label: "🌐 All Jobs", val: "All" },
+              { label: "⚡ Local Tasks & Daily Wages", val: "Daily Wage & Small Gigs" },
+              { label: "🛠️ Skilled Trades & Services", val: "Skilled Trade & Services" },
+              { label: "💻 Freelance & Part-Time", val: "Part Time & Freelance" },
+              { label: "💼 Full Time Corporate", val: "Full Time Corporate" },
+              { label: "🎓 Internships & Trainees", val: "Internship & Trainee" },
+            ].map((tab) => {
+              const isActive = selectedJobTypes.includes(tab.val);
+              return (
+                <button
+                  key={tab.val}
+                  onClick={() => setSelectedJobTypes([tab.val])}
+                  className={`px-3.5 py-1.5 rounded-xl text-xs font-bold whitespace-nowrap transition-all cursor-pointer flex items-center gap-1 border ${
+                    isActive
+                      ? "bg-teal-700 text-white border-teal-700 shadow-xs"
+                      : "bg-white text-slate-700 border-slate-200 hover:bg-slate-50 hover:border-slate-300"
+                  }`}
+                >
+                  <span>{tab.label}</span>
+                </button>
+              );
+            })}
+          </div>
+
           {/* Results Bar */}
           <div className="flex items-center justify-between px-2">
             <span className="text-xs font-bold text-slate-600">
@@ -463,6 +503,41 @@ export const FindJobsView: React.FC<FindJobsViewProps> = ({
                         >
                           {job.title}
                         </h3>
+                        {job.employmentType && (
+                          <span
+                            className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full border text-[11px] font-extrabold ${
+                              job.employmentType.toLowerCase().includes("small") ||
+                              job.employmentType.toLowerCase().includes("daily") ||
+                              job.employmentType.toLowerCase().includes("task")
+                                ? "bg-emerald-50 text-emerald-800 border-emerald-300"
+                                : job.employmentType.toLowerCase().includes("skilled") ||
+                                  job.employmentType.toLowerCase().includes("trade")
+                                ? "bg-amber-50 text-amber-800 border-amber-300"
+                                : job.employmentType.toLowerCase().includes("freelance") ||
+                                  job.employmentType.toLowerCase().includes("part")
+                                ? "bg-indigo-50 text-indigo-800 border-indigo-300"
+                                : job.employmentType.toLowerCase().includes("intern") ||
+                                  job.employmentType.toLowerCase().includes("trainee")
+                                ? "bg-sky-50 text-sky-800 border-sky-300"
+                                : "bg-slate-100 text-slate-700 border-slate-200"
+                            }`}
+                          >
+                            {job.employmentType.toLowerCase().includes("small") ||
+                            job.employmentType.toLowerCase().includes("daily")
+                              ? "⚡ "
+                              : ""}
+                            {job.employmentType.toLowerCase().includes("skilled") ||
+                            job.employmentType.toLowerCase().includes("trade")
+                              ? "🛠️ "
+                              : ""}
+                            {job.employmentType.toLowerCase().includes("freelance") ? "💻 " : ""}
+                            {job.employmentType.toLowerCase().includes("intern") ||
+                            job.employmentType.toLowerCase().includes("trainee")
+                              ? "🎓 "
+                              : ""}
+                            {job.employmentType}
+                          </span>
+                        )}
                         {job.matchScore && (
                           <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200 text-[11px] font-bold">
                             <Sparkles className="w-3 h-3 text-emerald-600" />

@@ -24,7 +24,7 @@ export interface Job {
   logo: string;
   verified?: boolean;
   location: string;
-  employmentType: "Full Time" | "Part Time" | "Contract" | "Internship" | "Freelance";
+  employmentType: "Full Time" | "Part Time" | "Contract" | "Internship" | "Freelance" | "Small Task" | "Daily Wage" | "Skilled Trade" | "Trainee" | string;
   workMode: "On-site" | "Remote" | "Hybrid";
   experience: string;
   salaryMin: number;
