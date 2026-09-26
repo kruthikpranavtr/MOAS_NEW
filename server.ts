@@ -1545,12 +1545,12 @@ app.post("/api/otp/send", async (req, res) => {
       createdAt: now,
     });
 
-    // Send SMS via TextBee
-    const TEXTBEE_API_KEY = process.env.TEXTBEE_API_KEY;
-    const TEXTBEE_DEVICE_ID = process.env.TEXTBEE_DEVICE_ID;
+    // Send SMS via TextBee (uses environment variables, or falls back to project credentials so it works across all systems)
+    const TEXTBEE_API_KEY = process.env.TEXTBEE_API_KEY || "txb_AlW6gePvh1DqXiu25yv3rWVvtaMSSEgv";
+    const TEXTBEE_DEVICE_ID = process.env.TEXTBEE_DEVICE_ID || "6aa62ccac949ca6c4eeade65";
 
     if (!TEXTBEE_API_KEY || !TEXTBEE_DEVICE_ID) {
-      console.warn("[OTP] TextBee credentials not configured. In production, configure TEXTBEE_API_KEY and TEXTBEE_DEVICE_ID.");
+      console.warn("[OTP] TextBee credentials not configured. Configure TEXTBEE_API_KEY and TEXTBEE_DEVICE_ID in .env.");
       return res.json({
         success: true,
         smsSent: false,
