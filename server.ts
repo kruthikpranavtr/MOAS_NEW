@@ -1492,8 +1492,8 @@ app.post("/api/moas/agent-run", async (req, res) => {
 // TEXTBEE SMS OTP VERIFICATION ENDPOINTS
 // ==========================================
 
-// In-memory OTP store: phone -> { otp, expiresAt, attempts }
-const otpStore = new Map<string, { otp: string; expiresAt: number; attempts: number }>();
+// In-memory OTP store: phone -> { otp, expiresAt, attempts, createdAt }
+const otpStore = new Map<string, { otp: string; expiresAt: number; attempts: number; createdAt: number }>();
 
 // Generate a cryptographically-ish random 6-digit OTP
 function generateOtp(): string {
@@ -1514,20 +1514,35 @@ function normalizePhone(phone: string): string {
 // POST /api/otp/send — Generate OTP and send via TextBee SMS
 app.post("/api/otp/send", async (req, res) => {
   try {
-    const { phone } = req.body;
+    const { phone, resend } = req.body;
     if (!phone || typeof phone !== "string" || phone.trim().length < 10) {
       return res.status(400).json({ success: false, error: "A valid phone number is required." });
     }
 
     const normalizedPhone = normalizePhone(phone.trim());
-    const otp = generateOtp();
+    const existing = otpStore.get(normalizedPhone);
+    const now = Date.now();
     const OTP_TTL_MS = 5 * 60 * 1000; // 5 minutes
+
+    // If an OTP was already generated within the last 20 seconds and this is not an explicit resend,
+    // do not overwrite the OTP (prevents React StrictMode double-invocation race conditions)
+    if (!resend && existing && (now - existing.createdAt < 20000) && now < existing.expiresAt) {
+      console.log(`[OTP] Duplicate send request for ${normalizedPhone} within 20s. Reusing active OTP ${existing.otp}.`);
+      return res.json({
+        success: true,
+        smsSent: true,
+        message: `OTP already dispatched via SMS to ${normalizedPhone}.`,
+      });
+    }
+
+    const otp = generateOtp();
 
     // Store the OTP
     otpStore.set(normalizedPhone, {
       otp,
-      expiresAt: Date.now() + OTP_TTL_MS,
+      expiresAt: now + OTP_TTL_MS,
       attempts: 0,
+      createdAt: now,
     });
 
     // Send SMS via TextBee
@@ -1535,12 +1550,11 @@ app.post("/api/otp/send", async (req, res) => {
     const TEXTBEE_DEVICE_ID = process.env.TEXTBEE_DEVICE_ID;
 
     if (!TEXTBEE_API_KEY || !TEXTBEE_DEVICE_ID) {
-      console.warn("[OTP] TextBee credentials not configured. OTP generated but not sent via SMS.");
+      console.warn("[OTP] TextBee credentials not configured. In production, configure TEXTBEE_API_KEY and TEXTBEE_DEVICE_ID.");
       return res.json({
         success: true,
         smsSent: false,
-        message: "OTP generated (SMS gateway not configured). OTP for testing: " + otp,
-        otp, // Only expose in dev/fallback mode
+        message: "SMS gateway is not configured.",
       });
     }
 
@@ -1569,8 +1583,7 @@ app.post("/api/otp/send", async (req, res) => {
       return res.json({
         success: true,
         smsSent: false,
-        message: "OTP generated but SMS delivery failed. Use the code shown on screen.",
-        otp, // Fallback: show OTP to user
+        message: "Failed to dispatch SMS through carrier gateway.",
         textbeeError: textbeeResult,
       });
     }
@@ -1579,10 +1592,7 @@ app.post("/api/otp/send", async (req, res) => {
       success: true,
       smsSent: true,
       message: `OTP sent successfully to ${normalizedPhone} via SMS.`,
-      // In production, never expose the OTP in the response.
-      // For this demo/dev environment, we include it as a fallback.
-      otp,
-      textbeeResult,
+      smsBatchId: textbeeResult?.data?.smsBatchId,
     });
   } catch (error: any) {
     console.error("[OTP] Error sending OTP:", error);
@@ -1608,7 +1618,7 @@ app.post("/api/otp/verify", async (req, res) => {
     if (!stored) {
       return res.status(400).json({
         success: false,
-        error: "No OTP was generated for this number. Please request a new one.",
+        error: "No active OTP found for this number. Please click 'Resend OTP'.",
       });
     }
 
@@ -1617,7 +1627,7 @@ app.post("/api/otp/verify", async (req, res) => {
       otpStore.delete(normalizedPhone);
       return res.status(400).json({
         success: false,
-        error: "OTP has expired. Please request a new one.",
+        error: "Verification code has expired. Please request a new one.",
       });
     }
 
@@ -1626,15 +1636,18 @@ app.post("/api/otp/verify", async (req, res) => {
       otpStore.delete(normalizedPhone);
       return res.status(429).json({
         success: false,
-        error: "Too many failed attempts. Please request a new OTP.",
+        error: "Maximum attempts reached. Please request a new OTP.",
       });
     }
 
-    // Verify
+    // Clean inputs for strict 6-digit match
+    const cleanEntered = String(otp).replace(/\D/g, "");
     stored.attempts += 1;
 
-    if (otp.trim() === stored.otp) {
-      otpStore.delete(normalizedPhone); // One-time use
+    console.log(`[OTP] Verifying ${normalizedPhone}: entered="${cleanEntered}", stored="${stored.otp}", attempt=${stored.attempts}/5`);
+
+    if (cleanEntered === stored.otp) {
+      otpStore.delete(normalizedPhone); // One-time use: delete immediately
       console.log(`[OTP] Verification SUCCESS for ${normalizedPhone}`);
       return res.json({
         success: true,
@@ -1642,12 +1655,15 @@ app.post("/api/otp/verify", async (req, res) => {
         message: "OTP verified successfully!",
       });
     } else {
-      console.log(`[OTP] Verification FAILED for ${normalizedPhone} — attempt ${stored.attempts}/5`);
+      const attemptsRemaining = Math.max(0, 5 - stored.attempts);
+      console.log(`[OTP] Verification FAILED for ${normalizedPhone} — ${attemptsRemaining} attempts remaining`);
       return res.json({
         success: true,
         verified: false,
-        attemptsRemaining: 5 - stored.attempts,
-        message: `Incorrect OTP. ${5 - stored.attempts} attempts remaining.`,
+        attemptsRemaining,
+        message: attemptsRemaining > 0
+          ? `Incorrect verification code. ${attemptsRemaining} attempt${attemptsRemaining === 1 ? "" : "s"} remaining.`
+          : "Maximum attempts reached. Please request a new OTP.",
       });
     }
   } catch (error: any) {

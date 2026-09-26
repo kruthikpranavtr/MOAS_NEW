@@ -5,13 +5,10 @@ import {
   ArrowRight,
   RotateCw,
   Lock,
-  Sparkles,
   Smartphone,
   Mail,
   CheckCircle2,
   AlertCircle,
-  Copy,
-  Check,
   Wifi,
   WifiOff,
   MessageSquare,
@@ -31,7 +28,6 @@ export const OtpView: React.FC<OtpViewProps> = ({
   onVerifySuccess,
   onBackToRegister,
 }) => {
-  const [activeOtp, setActiveOtp] = useState<string>("");
   const [otpInputs, setOtpInputs] = useState<string[]>(["", "", "", "", "", ""]);
   const [timer, setTimer] = useState(300); // 5 minute TTL
   const [resendCooldown, setResendCooldown] = useState(30);
@@ -39,21 +35,22 @@ export const OtpView: React.FC<OtpViewProps> = ({
   const [isSending, setIsSending] = useState(false);
   const [verificationError, setVerificationError] = useState<string | null>(null);
   const [isSuccess, setIsSuccess] = useState(false);
-  const [copied, setCopied] = useState(false);
   const [dispatchNotice, setDispatchNotice] = useState<string | null>(null);
   const [smsSent, setSmsSent] = useState(false);
   const [smsError, setSmsError] = useState<string | null>(null);
   const [attemptsRemaining, setAttemptsRemaining] = useState(5);
   const inputRefs = useRef<(HTMLInputElement | null)[]>([]);
+  const hasRequestedRef = useRef(false);
 
-  // Send OTP via SMS on mount
+  // Send OTP via SMS once on mount (guarded against React StrictMode double-execution)
   useEffect(() => {
-    if (phone) {
-      sendOtpSms();
+    if (phone && !hasRequestedRef.current) {
+      hasRequestedRef.current = true;
+      sendOtpSms(false);
     }
-  }, []);
+  }, [phone]);
 
-  // Resend cooldown timer
+  // Resend cooldown timer countdown
   useEffect(() => {
     const interval = setInterval(() => {
       setResendCooldown((prev) => (prev > 0 ? prev - 1 : 0));
@@ -70,8 +67,8 @@ export const OtpView: React.FC<OtpViewProps> = ({
     return () => clearInterval(interval);
   }, [timer]);
 
-  // Call the backend to generate and send OTP via TextBee SMS
-  const sendOtpSms = async () => {
+  // Call the backend to generate and dispatch OTP via TextBee SMS
+  const sendOtpSms = async (isExplicitResend = false) => {
     setIsSending(true);
     setSmsError(null);
     setVerificationError(null);
@@ -82,67 +79,72 @@ export const OtpView: React.FC<OtpViewProps> = ({
       const response = await fetch("/api/otp/send", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ phone }),
+        body: JSON.stringify({ phone, resend: isExplicitResend }),
       });
 
       const result = await response.json();
 
       if (result.success) {
-        // Store OTP for fallback display (in production, this would NOT be exposed)
-        if (result.otp) {
-          setActiveOtp(result.otp);
-        }
-
         if (result.smsSent) {
           setSmsSent(true);
-          setDispatchNotice(`✅ OTP sent via SMS to ${phone}. Check your phone!`);
+          setDispatchNotice(`OTP sent via SMS to ${phone}. Please check your phone messages!`);
         } else {
           setSmsSent(false);
-          setDispatchNotice(`⚠️ SMS gateway issue. Use the code shown below.`);
+          setDispatchNotice(`SMS could not be delivered: ${result.message || "Gateway unavailable"}`);
           if (result.textbeeError) {
-            setSmsError(`TextBee: ${JSON.stringify(result.textbeeError?.message || result.textbeeError)}`);
+            setSmsError(result.textbeeError?.message || "SMS delivery failed");
           }
         }
 
-        setTimer(300); // Reset 5 min timer
+        setTimer(300); // 5 min TTL
         setResendCooldown(30);
       } else {
         setSmsError(result.error || "Failed to send OTP");
-        setDispatchNotice(`❌ Failed to send OTP: ${result.error}`);
+        setDispatchNotice(`Failed to send OTP: ${result.error || "Service unavailable"}`);
       }
     } catch (err: any) {
       console.error("[OTP] Send error:", err);
       setSmsError(err.message || "Network error");
-      setDispatchNotice("❌ Network error. Could not reach OTP service.");
+      setDispatchNotice("Network error. Could not reach OTP service.");
     } finally {
       setIsSending(false);
-      // Auto-dismiss notice after 8 seconds
-      setTimeout(() => setDispatchNotice(null), 8000);
-      // Focus first input
-      setTimeout(() => inputRefs.current[0]?.focus(), 300);
+      // Auto-dismiss notice after 6 seconds
+      setTimeout(() => setDispatchNotice(null), 6000);
+      // Focus first input box
+      setTimeout(() => inputRefs.current[0]?.focus(), 250);
     }
   };
 
   const handleChange = (index: number, value: string) => {
-    if (!/^\d*$/.test(value)) return;
+    // Only accept digits
+    const cleaned = value.replace(/\D/g, "");
+    if (!cleaned && value !== "") return;
+
     setVerificationError(null);
 
     const newInputs = [...otpInputs];
-    newInputs[index] = value.slice(-1);
+    newInputs[index] = cleaned.slice(-1);
     setOtpInputs(newInputs);
 
-    if (value && index < 5) {
+    // Auto-advance to next input box
+    if (cleaned && index < 5) {
       inputRefs.current[index + 1]?.focus();
     }
   };
 
   const handleKeyDown = (index: number, e: React.KeyboardEvent<HTMLInputElement>) => {
-    if (e.key === "Backspace" && !otpInputs[index] && index > 0) {
+    if (e.key === "Backspace") {
+      if (!otpInputs[index] && index > 0) {
+        inputRefs.current[index - 1]?.focus();
+      }
+    } else if (e.key === "ArrowLeft" && index > 0) {
       inputRefs.current[index - 1]?.focus();
+    } else if (e.key === "ArrowRight" && index < 5) {
+      inputRefs.current[index + 1]?.focus();
     }
   };
 
-  // Paste handler for OTP
+  // Paste handler: allows pasting a 6-digit code anywhere
   const handlePaste = (e: React.ClipboardEvent) => {
     e.preventDefault();
     const pasted = e.clipboardData.getData("text").replace(/\D/g, "").slice(0, 6);
@@ -161,24 +163,7 @@ export const OtpView: React.FC<OtpViewProps> = ({
   // Resend / generate new OTP via SMS
   const handleResendOtp = () => {
     if (resendCooldown > 0 || isSending) return;
-    sendOtpSms();
-  };
-
-  // Quick auto-fill current active OTP (dev/demo convenience)
-  const handleAutoFill = () => {
-    if (!activeOtp) return;
-    const digits = activeOtp.split("");
-    setOtpInputs(digits);
-    setVerificationError(null);
-    inputRefs.current[5]?.focus();
-  };
-
-  // Copy OTP to clipboard
-  const handleCopyOtp = () => {
-    if (!activeOtp) return;
-    navigator.clipboard.writeText(activeOtp);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
+    sendOtpSms(true);
   };
 
   // Verify OTP against the backend
@@ -187,12 +172,12 @@ export const OtpView: React.FC<OtpViewProps> = ({
     const enteredCode = otpInputs.join("");
 
     if (enteredCode.length < 6) {
-      setVerificationError("Please enter all 6 digits of the OTP.");
+      setVerificationError("Please enter all 6 digits of the verification code.");
       return;
     }
 
     if (timer <= 0) {
-      setVerificationError("OTP has expired. Please request a new one.");
+      setVerificationError("Verification code has expired. Please click 'Resend OTP'.");
       return;
     }
 
@@ -213,12 +198,13 @@ export const OtpView: React.FC<OtpViewProps> = ({
         setTimeout(() => {
           setIsVerifying(false);
           onVerifySuccess();
-        }, 800);
+        }, 600);
       } else if (result.success && !result.verified) {
         setIsVerifying(false);
-        setAttemptsRemaining(result.attemptsRemaining ?? attemptsRemaining - 1);
+        const rem = result.attemptsRemaining ?? Math.max(0, attemptsRemaining - 1);
+        setAttemptsRemaining(rem);
         setVerificationError(
-          result.message || `Incorrect OTP. ${result.attemptsRemaining} attempts remaining.`
+          result.message || (rem > 0 ? `Incorrect verification code. ${rem} attempt${rem === 1 ? "" : "s"} remaining.` : "Maximum attempts reached. Please request a new OTP.")
         );
       } else {
         setIsVerifying(false);
@@ -233,10 +219,10 @@ export const OtpView: React.FC<OtpViewProps> = ({
 
   const maskedPhone = phone
     ? phone.replace(/(\+?\d{2,3})(\d{4})(\d{4})/, "$1 **** $3")
-    : "+91 ****4210";
+    : "+91 98437 67005";
   const maskedEmail = email
     ? email.replace(/(.{2})(.*)(@.*)/, "$1****$3")
-    : "kr****@moas.internal";
+    : "user@domain.com";
 
   const formatTimer = (secs: number) => {
     const m = Math.floor(secs / 60);
@@ -255,22 +241,15 @@ export const OtpView: React.FC<OtpViewProps> = ({
             </div>
             <div>
               <p className="text-xs font-bold text-teal-300">
-                {smsSent ? "SMS Dispatched via TextBee" : "OTP Security Dispatch"}
+                {smsSent ? "SMS Sent to Your Phone" : "Notification"}
               </p>
               <p className="text-xs text-slate-200 mt-0.5">{dispatchNotice}</p>
             </div>
           </div>
-          {activeOtp && (
-            <button
-              onClick={handleAutoFill}
-              className="text-xs font-bold bg-teal-500 hover:bg-teal-400 text-slate-900 px-3 py-1.5 rounded-xl cursor-pointer shrink-0 transition-colors shadow-sm"
-            >
-              Auto-fill
-            </button>
-          )}
         </div>
       )}
 
+      {/* Header */}
       <header className="w-full max-w-5xl mx-auto px-4 flex items-center justify-between">
         <button
           onClick={onBackToRegister}
@@ -287,6 +266,7 @@ export const OtpView: React.FC<OtpViewProps> = ({
         </button>
       </header>
 
+      {/* Main Verification Card */}
       <main className="w-full max-w-lg mx-auto px-4 my-6">
         <div className="bg-white rounded-3xl border border-slate-200/90 shadow-xl p-6 sm:p-10 text-center">
           {/* Step indicator */}
@@ -295,155 +275,71 @@ export const OtpView: React.FC<OtpViewProps> = ({
               Step 3 of 3
             </span>
             <span className="text-xs text-slate-500 font-medium">
-              SMS OTP Verification (TextBee)
+              SMS OTP Verification
             </span>
           </div>
 
-          <div className="w-14 h-14 rounded-2xl bg-teal-50 text-teal-700 flex items-center justify-center mx-auto mb-4">
+          <div className="w-14 h-14 rounded-2xl bg-teal-50 text-teal-700 flex items-center justify-center mx-auto mb-4 shadow-sm border border-teal-100">
             <ShieldCheck className="w-7 h-7" />
           </div>
 
           <h1 className="text-2xl font-bold text-slate-900">
-            Verify Your Phone Number
+            Verify Your Mobile Number
           </h1>
           <p className="text-xs sm:text-sm text-slate-600 mt-2">
-            {smsSent
-              ? "A 6-digit OTP has been sent to your phone via SMS. Enter it below."
-              : "Enter the 6-digit verification code shown below to verify your identity."}
+            Enter the 6-digit verification code sent via SMS to your phone to complete your account registration.
           </p>
 
           {/* Masked destination badges */}
-          <div className="mt-3 flex flex-wrap items-center justify-center gap-2">
-            <span className="inline-flex items-center gap-1.5 px-3 py-1 bg-slate-100 rounded-full text-xs font-semibold text-slate-800">
+          <div className="mt-4 flex flex-wrap items-center justify-center gap-2">
+            <span className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-slate-100 rounded-full text-xs font-semibold text-slate-800">
               <Smartphone className="w-3.5 h-3.5 text-teal-700" />
               {maskedPhone}
             </span>
-            <span className="inline-flex items-center gap-1.5 px-3 py-1 bg-slate-100 rounded-full text-xs font-semibold text-slate-800">
-              <Mail className="w-3.5 h-3.5 text-teal-700" />
-              {maskedEmail}
-            </span>
+            {email && (
+              <span className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-slate-100 rounded-full text-xs font-semibold text-slate-800">
+                <Mail className="w-3.5 h-3.5 text-teal-700" />
+                {maskedEmail}
+              </span>
+            )}
             <button
               onClick={onBackToRegister}
               className="text-xs text-teal-700 hover:text-teal-800 underline font-semibold cursor-pointer ml-1"
             >
-              Edit
+              Change
             </button>
           </div>
 
-          {/* SMS Delivery Status */}
+          {/* SMS Status Indicator */}
           <div className="mt-4 flex items-center justify-center gap-2">
             {isSending ? (
               <span className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-amber-50 border border-amber-200 rounded-full text-xs font-semibold text-amber-800">
                 <div className="w-3.5 h-3.5 border-2 border-amber-400 border-t-amber-700 rounded-full animate-spin" />
-                Sending SMS via TextBee...
+                Dispatching SMS to your phone...
               </span>
             ) : smsSent ? (
               <span className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-emerald-50 border border-emerald-200 rounded-full text-xs font-semibold text-emerald-800">
                 <Wifi className="w-3.5 h-3.5 text-emerald-600" />
-                SMS delivered via TextBee Gateway
+                SMS sent to your mobile phone
               </span>
             ) : smsError ? (
               <span className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-rose-50 border border-rose-200 rounded-full text-xs font-semibold text-rose-800">
                 <WifiOff className="w-3.5 h-3.5 text-rose-600" />
-                SMS failed — use code below
+                SMS issue — click Resend below
               </span>
             ) : null}
           </div>
 
-          {/* Active OTP Display Box */}
-          <div className="mt-6 p-4 bg-gradient-to-br from-teal-50/80 via-white to-slate-50 border-2 border-teal-200/80 rounded-2xl text-left shadow-xs">
-            <div className="flex items-center justify-between gap-2 mb-2">
-              <span className="text-[11px] font-bold text-teal-900 uppercase tracking-wider flex items-center gap-1.5">
-                <Sparkles className="w-3.5 h-3.5 text-teal-600" />
-                {smsSent ? "SMS OTP Code (also sent to phone)" : "Live Generated OTP Code"}
-              </span>
-              <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full flex items-center gap-1 ${
-                timer > 0
-                  ? "text-emerald-800 bg-emerald-100"
-                  : "text-rose-800 bg-rose-100"
-              }`}>
-                {timer > 0 ? (
-                  <>
-                    <CheckCircle2 className="w-3 h-3 text-emerald-600" /> Active · {formatTimer(timer)}
-                  </>
-                ) : (
-                  <>
-                    <AlertCircle className="w-3 h-3 text-rose-600" /> Expired
-                  </>
-                )}
-              </span>
-            </div>
-
-            <div className="flex items-center justify-between bg-white px-4 py-3 rounded-xl border border-teal-100">
-              <div className="flex items-center gap-2">
-                {activeOtp ? (
-                  <span className="font-mono text-2xl sm:text-3xl font-black text-slate-900 tracking-[0.25em]">
-                    {activeOtp}
-                  </span>
-                ) : (
-                  <span className="text-sm text-slate-400 font-semibold">Generating...</span>
-                )}
-              </div>
-              <div className="flex items-center gap-1.5">
-                <button
-                  type="button"
-                  onClick={handleCopyOtp}
-                  title="Copy OTP"
-                  disabled={!activeOtp}
-                  className="p-2 text-slate-500 hover:text-slate-800 bg-slate-100 hover:bg-slate-200 rounded-lg cursor-pointer transition-colors disabled:opacity-40"
-                >
-                  {copied ? <Check className="w-4 h-4 text-emerald-600" /> : <Copy className="w-4 h-4" />}
-                </button>
-                <button
-                  type="button"
-                  onClick={handleAutoFill}
-                  disabled={!activeOtp}
-                  className="px-3 py-1.5 bg-teal-700 hover:bg-teal-800 text-white rounded-lg text-xs font-bold flex items-center gap-1 shadow-xs cursor-pointer transition-colors disabled:opacity-40"
-                >
-                  <Sparkles className="w-3.5 h-3.5" />
-                  <span>Fill Code</span>
-                </button>
-              </div>
-            </div>
-
-            <div className="mt-3 flex items-center justify-between text-xs pt-1 border-t border-teal-100/60">
-              <span className="text-slate-500 text-[11px]">
-                {attemptsRemaining < 5
-                  ? `${attemptsRemaining} verification attempts remaining`
-                  : "Need a different code?"}
-              </span>
-              <button
-                type="button"
-                onClick={handleResendOtp}
-                disabled={resendCooldown > 0 || isSending}
-                className="inline-flex items-center gap-1 font-bold text-teal-700 hover:text-teal-900 cursor-pointer text-xs transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
-              >
-                <RotateCw className={`w-3.5 h-3.5 ${isSending ? "animate-spin" : ""}`} />
-                <span>
-                  {isSending
-                    ? "Sending..."
-                    : resendCooldown > 0
-                    ? `Resend in ${resendCooldown}s`
-                    : "Resend OTP via SMS"}
-                </span>
-              </button>
-            </div>
-          </div>
-
           {/* Error notice */}
           {verificationError && (
-            <div className="mt-4 p-3 bg-rose-50 border border-rose-200 text-rose-800 rounded-xl text-xs font-semibold text-left flex items-start gap-2 animate-in fade-in">
+            <div className="mt-5 p-3.5 bg-rose-50 border border-rose-200 text-rose-800 rounded-xl text-xs font-semibold text-left flex items-start gap-2 animate-in fade-in">
               <AlertCircle className="w-4 h-4 text-rose-600 shrink-0 mt-0.5" />
               <div>
                 <p>{verificationError}</p>
-                {activeOtp && (
-                  <button
-                    type="button"
-                    onClick={handleAutoFill}
-                    className="text-teal-700 underline font-bold mt-1 inline-block cursor-pointer"
-                  >
-                    Auto-fill active code ({activeOtp})
-                  </button>
+                {attemptsRemaining <= 0 && (
+                  <p className="mt-1 text-[11px] text-rose-700 font-normal">
+                    Please click "Resend OTP" below to receive a fresh verification code.
+                  </p>
                 )}
               </div>
             </div>
@@ -451,9 +347,9 @@ export const OtpView: React.FC<OtpViewProps> = ({
 
           {/* Success notice */}
           {isSuccess && (
-            <div className="mt-4 p-3.5 bg-emerald-50 border border-emerald-200 text-emerald-900 rounded-xl text-xs font-bold text-center flex items-center justify-center gap-2 animate-in zoom-in-95">
+            <div className="mt-5 p-3.5 bg-emerald-50 border border-emerald-200 text-emerald-900 rounded-xl text-xs font-bold text-center flex items-center justify-center gap-2 animate-in zoom-in-95">
               <CheckCircle2 className="w-5 h-5 text-emerald-600 shrink-0" />
-              <span>OTP Verified Successfully! Initializing your workspace...</span>
+              <span>OTP Verified Successfully! Launching your workspace...</span>
             </div>
           )}
 
@@ -466,12 +362,13 @@ export const OtpView: React.FC<OtpViewProps> = ({
                   ref={(el) => (inputRefs.current[idx] = el)}
                   type="text"
                   inputMode="numeric"
+                  pattern="[0-9]*"
                   maxLength={1}
                   value={digit}
                   onChange={(e) => handleChange(idx, e.target.value)}
                   onKeyDown={(e) => handleKeyDown(idx, e)}
                   disabled={isSuccess || isVerifying}
-                  className={`w-11 h-13 sm:w-12 sm:h-14 text-center text-xl font-bold text-slate-800 bg-slate-50 border-2 rounded-xl focus:bg-white focus:outline-none transition-all ${
+                  className={`w-11 h-13 sm:w-12 sm:h-14 text-center text-2xl font-black text-slate-800 bg-slate-50 border-2 rounded-xl focus:bg-white focus:outline-none transition-all shadow-inner ${
                     verificationError
                       ? "border-rose-300 focus:border-rose-500"
                       : "border-slate-200 focus:border-teal-600"
@@ -480,31 +377,43 @@ export const OtpView: React.FC<OtpViewProps> = ({
               ))}
             </div>
 
-            {/* Timer display */}
-            <div className="mt-5 text-xs text-slate-500">
-              {timer > 0 ? (
-                <span>
-                  OTP valid for{" "}
-                  <span className="font-bold text-slate-800">{formatTimer(timer)}</span>
-                </span>
-              ) : (
+            {/* Timer and Resend section */}
+            <div className="mt-6 flex flex-col sm:flex-row items-center justify-between text-xs text-slate-500 gap-2 border-t border-slate-100 pt-4">
+              <div>
+                {timer > 0 ? (
+                  <span>
+                    Expires in:{" "}
+                    <span className="font-bold text-slate-800">{formatTimer(timer)}</span>
+                  </span>
+                ) : (
+                  <span className="text-rose-600 font-bold">Code has expired</span>
+                )}
+              </div>
+
+              <div>
                 <button
                   type="button"
                   onClick={handleResendOtp}
-                  disabled={isSending}
-                  className="inline-flex items-center gap-1 font-bold text-teal-700 hover:text-teal-800 cursor-pointer"
+                  disabled={resendCooldown > 0 || isSending}
+                  className="inline-flex items-center gap-1.5 font-bold text-teal-700 hover:text-teal-900 cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
                 >
                   <RotateCw className={`w-3.5 h-3.5 ${isSending ? "animate-spin" : ""}`} />
-                  {isSending ? "Sending new OTP..." : "Request New OTP"}
+                  <span>
+                    {isSending
+                      ? "Sending SMS..."
+                      : resendCooldown > 0
+                      ? `Resend OTP in ${resendCooldown}s`
+                      : "Resend OTP via SMS"}
+                  </span>
                 </button>
-              )}
+              </div>
             </div>
 
             {/* Verify button */}
             <button
               type="submit"
-              disabled={isVerifying || isSuccess || timer <= 0}
-              className="w-full mt-6 py-3 px-4 bg-teal-700 hover:bg-teal-800 active:bg-teal-900 text-white rounded-xl font-bold text-sm shadow-md transition-all flex items-center justify-center gap-2 cursor-pointer disabled:opacity-75"
+              disabled={isVerifying || isSuccess || timer <= 0 || otpInputs.join("").length < 6}
+              className="w-full mt-6 py-3.5 px-4 bg-teal-700 hover:bg-teal-800 active:bg-teal-900 text-white rounded-xl font-bold text-sm shadow-md transition-all flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
             >
               {isVerifying ? (
                 <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
@@ -517,16 +426,16 @@ export const OtpView: React.FC<OtpViewProps> = ({
             </button>
           </form>
 
-          {/* Trust Badge */}
+          {/* Security Guarantee */}
           <div className="mt-6 pt-4 border-t border-slate-100 flex items-center justify-center gap-2 text-slate-400 text-xs">
             <Lock className="w-3.5 h-3.5 text-teal-600" />
-            <span>Secured by TextBee SMS Gateway · OTP expires in 5 minutes · Max 5 attempts</span>
+            <span>Encrypted SMS Delivery · Code valid for 5 minutes · Maximum 5 attempts</span>
           </div>
         </div>
       </main>
 
       <footer className="text-center text-xs text-slate-400">
-        © {new Date().getFullYear()} MOAS. All rights reserved. | SMS powered by textbee.dev
+        © {new Date().getFullYear()} MOAS. All rights reserved. | SMS Gateway powered by textbee.dev
       </footer>
     </div>
   );
