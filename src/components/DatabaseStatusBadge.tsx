@@ -103,20 +103,20 @@ export const DatabaseStatusBadge: React.FC<DatabaseStatusBadgeProps> = ({ onData
       <button
         type="button"
         onClick={() => setIsOpen(!isOpen)}
-        className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-full text-xs font-semibold bg-emerald-950/40 hover:bg-emerald-900/60 text-emerald-300 border border-emerald-500/30 transition-colors shadow-2xs cursor-pointer backdrop-blur-md"
+        className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-full text-xs font-semibold bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-200/80 transition-colors shadow-2xs cursor-pointer"
         title="Click to view Cloud Firestore Live Database details"
       >
         <span className="relative flex h-2 w-2">
           <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
-          <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-400"></span>
+          <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
         </span>
-        <Database className="w-3.5 h-3.5 text-emerald-400" />
+        <Database className="w-3.5 h-3.5 text-emerald-700" />
         <span className="hidden sm:inline font-mono text-[11px] tracking-wide">DB Live</span>
       </button>
 
       {isOpen && (
-        <div className="absolute right-0 mt-2 w-80 sm:w-96 bg-[#0F172A]/95 border border-white/10 rounded-2xl shadow-2xl py-3 px-4 z-50 animate-in fade-in slide-in-from-top-2 duration-150 text-slate-100 backdrop-blur-xl">
-          <div className="flex items-center justify-between pb-3 border-b border-white/10">
+        <div className="absolute right-0 mt-2 w-80 sm:w-96 bg-white border border-slate-200 rounded-2xl shadow-xl py-3 px-4 z-50 animate-in fade-in slide-in-from-top-2 duration-150 text-slate-800">
+          <div className="flex items-center justify-between pb-3 border-b border-slate-100">
             <div className="flex items-center gap-2">
               <div className="w-8 h-8 rounded-lg bg-emerald-100 text-emerald-700 flex items-center justify-center">
                 <Database className="w-4 h-4" />

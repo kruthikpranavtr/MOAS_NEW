@@ -8,72 +8,68 @@
 
   body {
     font-family: var(--font-sans);
-    background-color: #090D16;
-    color: #F1F5F9;
+    background-color: #F8FAFC;
+    color: #0F172A;
   }
 }
 
-/* ArchitectureDiagram.ai Style Blueprint Grid Background */
+/* ArchitectureDiagram.ai Light Blueprint Grid Background */
 .bg-blueprint-grid {
-  background-color: #090D16;
+  background-color: #F8FAFC;
   background-image: 
-    linear-gradient(to right, rgba(255, 255, 255, 0.05) 1px, transparent 1px),
-    linear-gradient(to bottom, rgba(255, 255, 255, 0.05) 1px, transparent 1px);
+    linear-gradient(to right, rgba(15, 23, 42, 0.04) 1px, transparent 1px),
+    linear-gradient(to bottom, rgba(15, 23, 42, 0.04) 1px, transparent 1px);
   background-size: 36px 36px;
 }
 
 .bg-blueprint-dashed {
-  background-color: #090D16;
-  background-image: url("data:image/svg+xml,%3Csvg width='36' height='36' viewBox='0 0 36 36' fill='none' xmlns='http://www.w3.org/2000/svg'%3E%3Crect x='0.5' y='0.5' width='35' height='35' stroke='rgba(255,255,255,0.07)' stroke-width='0.7' stroke-dasharray='2 2'/%3E%3C/svg%3E");
+  background-color: #F8FAFC;
+  background-image: url("data:image/svg+xml,%3Csvg width='36' height='36' viewBox='0 0 36 36' fill='none' xmlns='http://www.w3.org/2000/svg'%3E%3Crect x='0.5' y='0.5' width='35' height='35' stroke='rgba(15,23,42,0.06)' stroke-width='0.7' stroke-dasharray='2 2'/%3E%3C/svg%3E");
   background-size: 36px 36px;
 }
 
 .bg-dot-grid {
-  background-image: radial-gradient(rgba(255, 255, 255, 0.12) 1px, transparent 1px);
+  background-image: radial-gradient(rgba(15, 23, 42, 0.08) 1px, transparent 1px);
   background-size: 24px 24px;
 }
 
-/* Glassmorphism Panels matching ArchitectureDiagram.ai */
+/* Glassmorphism Panels matching ArchitectureDiagram.ai Light Theme */
 .glass-panel {
-  background: rgba(15, 23, 42, 0.65);
+  background: rgba(255, 255, 255, 0.85);
   backdrop-filter: blur(16px);
   -webkit-backdrop-filter: blur(16px);
-  border: 1px solid rgba(255, 255, 255, 0.09);
-  box-shadow: 0 4px 24px -1px rgba(0, 0, 0, 0.35), inset 0 1px 0 0 rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(226, 232, 240, 0.9);
+  box-shadow: 0 4px 20px -2px rgba(15, 23, 42, 0.04), 0 2px 6px -1px rgba(15, 23, 42, 0.02);
 }
 
 .glass-card {
-  background: rgba(17, 24, 39, 0.7);
+  background: rgba(255, 255, 255, 0.95);
   backdrop-filter: blur(12px);
   -webkit-backdrop-filter: blur(12px);
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  box-shadow: 0 8px 30px rgba(0, 0, 0, 0.3);
+  border: 1px solid rgba(226, 232, 240, 0.85);
+  box-shadow: 0 4px 16px -2px rgba(15, 23, 42, 0.04);
   transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1);
 }
 
 .glass-card:hover {
-  border-color: rgba(6, 182, 212, 0.35);
-  box-shadow: 0 12px 36px rgba(0, 0, 0, 0.45), 0 0 24px rgba(6, 182, 212, 0.12);
+  border-color: rgba(13, 148, 136, 0.4);
+  box-shadow: 0 12px 28px -4px rgba(15, 23, 42, 0.08), 0 0 16px rgba(13, 148, 136, 0.08);
   transform: translateY(-2px);
 }
 
 /* Tech Accent Glows */
-.glow-cyan {
-  box-shadow: 0 0 20px rgba(6, 182, 212, 0.25);
+.glow-teal {
+  box-shadow: 0 0 15px rgba(13, 148, 136, 0.2);
 }
 
 .glow-indigo {
-  box-shadow: 0 0 25px rgba(99, 102, 241, 0.25);
-}
-
-.glow-emerald {
-  box-shadow: 0 0 20px rgba(16, 185, 129, 0.25);
+  box-shadow: 0 0 15px rgba(99, 102, 241, 0.15);
 }
 
 /* Monospace Micro-Pill */
 .tech-pill {
   font-family: var(--font-mono);
-  letter-spacing: 0.04em;
+  letter-spacing: 0.03em;
 }
 
 /* Custom Sleek Scrollbar */
@@ -83,14 +79,14 @@
 }
 
 ::-webkit-scrollbar-track {
-  background: #090D16;
+  background: #F8FAFC;
 }
 
 ::-webkit-scrollbar-thumb {
-  background: rgba(255, 255, 255, 0.15);
+  background: rgba(15, 23, 42, 0.15);
   border-radius: 9999px;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: rgba(6, 182, 212, 0.4);
+  background: rgba(13, 148, 136, 0.4);
 }

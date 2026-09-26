@@ -1245,7 +1245,7 @@ export default function App() {
 
   return (
     <LanguageProvider>
-      <div className="min-h-screen bg-[#090D16] text-[#F1F5F9] bg-blueprint-dashed flex flex-col font-sans antialiased selection:bg-cyan-500/30 selection:text-cyan-300 relative overflow-x-hidden">
+      <div className="min-h-screen bg-[#F8FAFC] text-[#0F172A] bg-blueprint-dashed flex flex-col font-sans antialiased selection:bg-teal-500/20 selection:text-teal-700 relative overflow-x-hidden">
         {/* Top Navigation Bar: ONLY rendered when authenticated */}
         {isAuthenticated && (
           <Navbar
