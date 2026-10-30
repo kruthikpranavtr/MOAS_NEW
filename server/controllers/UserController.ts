@@ -1,6 +1,6 @@
 import { Request, Response } from "express";
 import { userService } from "../services/UserService.js";
-import { AuthenticatedRequest } from "../middleware/auth.js";
+import { AuthenticatedRequest, setSessionCookie } from "../middleware/auth.js";
 import { sendSuccess, sendError } from "../utils/response.js";
 import { logger } from "../utils/logger.js";
 
@@ -46,6 +46,8 @@ export class UserController {
         ...req.body,
       });
 
+      setSessionCookie(res, result.token, false);
+
       return sendSuccess(
         res,
         {
@@ -70,7 +72,7 @@ export class UserController {
 
       // Ownership enforcement: user can only modify their own profile unless Admin
       if (callerId !== targetId && callerRole !== "Admin") {
-        return sendError(res, "Forbidden: You cannot modify another user's profile.", 403);
+        return sendError(res, "Forbidden: You cannot modify another user's profile. You can only manage your own account.", 403);
       }
 
       const updated = await userService.updateProfile(targetId, req.body);

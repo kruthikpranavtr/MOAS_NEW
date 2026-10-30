@@ -34,6 +34,8 @@ export interface UserRecord {
   experienceLevel?: string;
   education?: any[];
   resumes?: ResumeItem[];
+  emailVerified?: boolean;
+  phoneVerified?: boolean;
   createdAt: string;
   updatedAt?: string;
 }

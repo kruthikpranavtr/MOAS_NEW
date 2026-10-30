@@ -79,7 +79,8 @@ export const OtpView: React.FC<OtpViewProps> = ({
       const response = await fetch("/api/otp/send", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ phone, resend: isExplicitResend }),
+        credentials: "include",
+        body: JSON.stringify({ phone, resend: isExplicitResend, purpose: "phone_verification" }),
       });
 
       const result = await response.json();
@@ -188,7 +189,8 @@ export const OtpView: React.FC<OtpViewProps> = ({
       const response = await fetch("/api/otp/verify", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ phone, otp: enteredCode }),
+        credentials: "include",
+        body: JSON.stringify({ phone, otp: enteredCode, purpose: "phone_verification" }),
       });
 
       const result = await response.json();

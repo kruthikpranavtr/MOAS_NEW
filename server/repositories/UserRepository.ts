@@ -34,6 +34,8 @@ function mapRowToUser(row: any, resumes: ResumeItem[] = []): UserRecord {
       ? JSON.parse(row.education || "[]")
       : [],
     resumes,
+    emailVerified: row.email_verified ?? false,
+    phoneVerified: row.phone_verified ?? false,
     createdAt: row.created_at ? new Date(row.created_at).toISOString() : new Date().toISOString(),
     updatedAt: row.updated_at ? new Date(row.updated_at).toISOString() : undefined,
   };

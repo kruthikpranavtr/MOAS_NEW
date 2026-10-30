@@ -106,7 +106,7 @@ export default function App() {
 
     for (let attempt = 0; attempt <= retries; attempt++) {
       try {
-        const res = await fetch(url, { headers });
+        const res = await fetch(url, { headers, credentials: "include" });
         if (res.ok) {
           const data = await res.json();
           return data as T;
@@ -130,8 +130,42 @@ export default function App() {
     if (token && !headers.has("Authorization")) {
       headers.set("Authorization", `Bearer ${token}`);
     }
-    return fetch(url, { ...init, headers });
+    return fetch(url, { ...init, headers, credentials: "include" });
   };
+
+  // Restore authenticated session from HttpOnly cookie or token on initial app load
+  useEffect(() => {
+    const restoreSession = async () => {
+      try {
+        const token = localStorage.getItem("moas_auth_token");
+        const headers: Record<string, string> = {};
+        if (token) headers["Authorization"] = `Bearer ${token}`;
+
+        const res = await fetch("/api/auth/me", {
+          headers,
+          credentials: "include",
+        });
+
+        if (res.ok) {
+          const data = await res.json();
+          if (data.success && data.user) {
+            const isEmployer = data.user.role?.toLowerCase() === "employer";
+            setUser((prev) => ({
+              ...prev,
+              ...data.user,
+              role: isEmployer ? "Employer" : "Candidate",
+            }));
+            setIsAuthenticated(true);
+            setCurrentNav(isEmployer ? "dashboard/employer" : "dashboard/jobseeker");
+          }
+        }
+      } catch (err) {
+        // Not authenticated
+      }
+    };
+
+    restoreSession();
+  }, []);
 
   // Synchronize initial data from Backend and Cloud Firestore Database
   const fetchDataFromBackend = useCallback(async () => {
@@ -636,14 +670,17 @@ export default function App() {
   };
 
   // Logout handler
-  const handleLogout = () => {
+  const handleLogout = async () => {
     const token = localStorage.getItem("moas_auth_token");
     localStorage.removeItem("moas_auth_token");
-    if (token) {
-      fetch("/api/auth/logout", {
+    try {
+      await fetch("/api/auth/logout", {
         method: "POST",
-        headers: { Authorization: `Bearer ${token}` },
-      }).catch(console.warn);
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
+        credentials: "include",
+      });
+    } catch (e) {
+      console.warn("Logout request note:", e);
     }
     setIsAuthenticated(false);
     setCurrentNav("login");

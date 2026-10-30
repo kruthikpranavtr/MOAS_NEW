@@ -15,6 +15,7 @@ import {
 } from "lucide-react";
 import { MoasLogo } from "../MoasLogo";
 import { RegisteredUser } from "../../types";
+import { ForgotPasswordModal } from "../modals/ForgotPasswordModal";
 
 interface LoginViewProps {
   initialEmail?: string;
@@ -36,6 +37,7 @@ export const LoginView: React.FC<LoginViewProps> = ({
   const [showPassword, setShowPassword] = useState(false);
   const [rememberMe, setRememberMe] = useState(true);
   const [isLoading, setIsLoading] = useState(false);
+  const [isForgotPasswordOpen, setIsForgotPasswordOpen] = useState(false);
   const [routingStatus, setRoutingStatus] = useState<{
     type: "success" | "wrongPassword" | "notFound";
     message: string;
@@ -254,7 +256,7 @@ export const LoginView: React.FC<LoginViewProps> = ({
                     </label>
                     <button
                       type="button"
-                      onClick={() => alert("Password reset link sent to your registered email.")}
+                      onClick={() => setIsForgotPasswordOpen(true)}
                       className="text-xs font-semibold text-teal-700 hover:text-teal-800 cursor-pointer"
                     >
                       Forgot Password?
@@ -356,6 +358,13 @@ export const LoginView: React.FC<LoginViewProps> = ({
       <footer className="w-full max-w-7xl mx-auto px-6 py-6 text-center text-xs text-slate-400">
         © {new Date().getFullYear()} MOAS Platform Inc. All rights reserved. • ML Opportunities & Algorithmic Services
       </footer>
+
+      {/* Forgot Password Modal */}
+      <ForgotPasswordModal
+        isOpen={isForgotPasswordOpen}
+        onClose={() => setIsForgotPasswordOpen(false)}
+        initialIdentifier={identifier}
+      />
     </div>
   );
 };

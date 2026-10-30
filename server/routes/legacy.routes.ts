@@ -19,9 +19,16 @@ const legacyRouter = Router();
 // ==========================================
 // 1. AUTHENTICATION (Legacy /api/auth/*)
 // ==========================================
+legacyRouter.post("/auth/register", authRateLimiter, (req, res) => authController.register(req, res));
 legacyRouter.post("/auth/login", authRateLimiter, (req, res) => authController.login(req, res));
 legacyRouter.post("/auth/logout", (req, res) => authController.logout(req, res));
 legacyRouter.get("/auth/me", requireAuth, (req, res) => authController.getMe(req, res));
+legacyRouter.post("/auth/password/forgot", authRateLimiter, (req, res) => authController.forgotPassword(req, res));
+legacyRouter.get("/auth/password/verify-token", (req, res) => authController.verifyResetToken(req, res));
+legacyRouter.post("/auth/password/reset", authRateLimiter, (req, res) => authController.resetPassword(req, res));
+legacyRouter.post("/auth/email/send-verification", requireAuth, (req, res) => authController.sendEmailVerification(req, res));
+legacyRouter.post("/auth/email/verify", (req, res) => authController.verifyEmail(req, res));
+
 
 // ==========================================
 // 2. JOBS (Legacy /api/jobs/*)

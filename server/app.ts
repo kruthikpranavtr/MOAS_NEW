@@ -4,6 +4,7 @@ import { securityHeadersMiddleware } from "./middleware/security.js";
 import { requestIdMiddleware } from "./middleware/requestId.js";
 import { requestLoggerMiddleware } from "./middleware/requestLogger.js";
 import { notFoundHandler, errorHandler } from "./middleware/errorHandler.js";
+import { verifyCsrf } from "./middleware/auth.js";
 import rootApiRouter from "./routes/index.js";
 
 export function createApp(): Express {
@@ -23,7 +24,10 @@ export function createApp(): Express {
   app.use(requestIdMiddleware);
   app.use(requestLoggerMiddleware);
 
-  // 5. Mount API routes at /api
+  // 5. Double-submit CSRF Protection for state-changing cookie requests
+  app.use(verifyCsrf);
+
+  // 6. Mount API routes at /api
   app.use("/api", rootApiRouter);
 
   // 6. Catch-all 404 for unhandled API routes

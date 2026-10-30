@@ -60,7 +60,7 @@ export class UserService {
     };
 
     const saved = await userRepository.save(userToSave);
-    const token = createSessionRecord(saved);
+    const token = await createSessionRecord(saved);
 
     return {
       user: sanitizeUser(saved)!,
