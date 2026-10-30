@@ -8,8 +8,8 @@ import {
   RotateCcw,
   AlertCircle,
   Sparkles,
-  Video,
-  VideoOff,
+  RefreshCw,
+  Trash2,
 } from "lucide-react";
 
 interface PhotoUploadModalProps {
@@ -37,7 +37,10 @@ export const PhotoUploadModal: React.FC<PhotoUploadModalProps> = ({
 }) => {
   const [activeTab, setActiveTab] = useState<"library" | "camera">("library");
   const [selectedPhoto, setSelectedPhoto] = useState<string>(currentPhotoUrl);
+  const [selectedFile, setSelectedFile] = useState<File | Blob | null>(null);
   const [isDragging, setIsDragging] = useState(false);
+  const [isUploading, setIsUploading] = useState(false);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
   // Live Camera states
   const [cameraStream, setCameraStream] = useState<MediaStream | null>(null);
@@ -97,9 +100,9 @@ export const PhotoUploadModal: React.FC<PhotoUploadModalProps> = ({
     }
   };
 
-  // Switch tabs
   const handleTabChange = (tab: "library" | "camera") => {
     setActiveTab(tab);
+    setErrorMessage(null);
     if (tab === "camera") {
       startCamera();
     } else {
@@ -108,21 +111,23 @@ export const PhotoUploadModal: React.FC<PhotoUploadModalProps> = ({
     }
   };
 
-  // Clean up camera on close / unmount
   useEffect(() => {
     if (!isOpen) {
       stopCamera();
       setCapturedPhoto(null);
       setCountdown(null);
+      setSelectedFile(null);
+      setErrorMessage(null);
     } else {
       setSelectedPhoto(currentPhotoUrl);
+      setSelectedFile(null);
+      setErrorMessage(null);
     }
     return () => {
       stopCamera();
     };
-  }, [isOpen]);
+  }, [isOpen, currentPhotoUrl]);
 
-  // Connect stream to video element when it becomes available
   useEffect(() => {
     if (isCameraActive && cameraStream && videoRef.current) {
       videoRef.current.srcObject = cameraStream;
@@ -143,23 +148,29 @@ export const PhotoUploadModal: React.FC<PhotoUploadModalProps> = ({
     const ctx = canvas.getContext("2d");
     if (!ctx) return;
 
-    // Center crop square
     const startX = (video.videoWidth - size) / 2;
     const startY = (video.videoHeight - size) / 2;
 
     // Flip horizontally for natural mirror feel
     ctx.translate(size, 0);
     ctx.scale(-1, 1);
-
     ctx.drawImage(video, startX, startY, size, size, 0, 0, size, size);
 
-    const dataUrl = canvas.toDataURL("image/jpeg", 0.92);
-    setCapturedPhoto(dataUrl);
-    setSelectedPhoto(dataUrl);
-    stopCamera();
+    canvas.toBlob(
+      (blob) => {
+        if (blob) {
+          setSelectedFile(blob);
+          const previewUrl = URL.createObjectURL(blob);
+          setCapturedPhoto(previewUrl);
+          setSelectedPhoto(previewUrl);
+          stopCamera();
+        }
+      },
+      "image/jpeg",
+      0.92
+    );
   };
 
-  // Countdown capture
   const handleCaptureWithTimer = () => {
     setCountdown(3);
     const interval = setInterval(() => {
@@ -174,26 +185,35 @@ export const PhotoUploadModal: React.FC<PhotoUploadModalProps> = ({
     }, 1000);
   };
 
-  // File upload handler
-  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
+  // Validate and handle chosen file
+  const processChosenImage = (file: File) => {
+    setErrorMessage(null);
 
-    if (!file.type.startsWith("image/")) {
-      alert("Please choose a valid image file (PNG, JPG, JPEG, WEBP).");
+    // 1. Size check: max 2MB
+    if (file.size > 2 * 1024 * 1024) {
+      setErrorMessage("File exceeds the 2 MB maximum limit for profile photos.");
       return;
     }
 
-    const reader = new FileReader();
-    reader.onload = (event) => {
-      if (typeof event.target?.result === "string") {
-        setSelectedPhoto(event.target.result);
-      }
-    };
-    reader.readAsDataURL(file);
+    // 2. Type check
+    const allowedTypes = ["image/jpeg", "image/png", "image/webp", "image/jpg"];
+    if (!allowedTypes.includes(file.type.toLowerCase())) {
+      setErrorMessage("Invalid image format. Only JPEG, PNG, and WebP files are supported.");
+      return;
+    }
+
+    setSelectedFile(file);
+    const previewUrl = URL.createObjectURL(file);
+    setSelectedPhoto(previewUrl);
   };
 
-  // Drag & drop handlers
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      processChosenImage(file);
+    }
+  };
+
   const handleDragOver = (e: React.DragEvent) => {
     e.preventDefault();
     setIsDragging(true);
@@ -208,22 +228,93 @@ export const PhotoUploadModal: React.FC<PhotoUploadModalProps> = ({
     e.preventDefault();
     setIsDragging(false);
     const file = e.dataTransfer.files?.[0];
-    if (file && file.type.startsWith("image/")) {
-      const reader = new FileReader();
-      reader.onload = (event) => {
-        if (typeof event.target?.result === "string") {
-          setSelectedPhoto(event.target.result);
-        }
-      };
-      reader.readAsDataURL(file);
+    if (file) {
+      processChosenImage(file);
     }
   };
 
-  const handleApply = () => {
-    if (selectedPhoto) {
-      onPhotoSelected(selectedPhoto);
+  // Upload or apply selected photo
+  const handleApply = async () => {
+    if (!selectedPhoto && !selectedFile) return;
+
+    setIsUploading(true);
+    setErrorMessage(null);
+
+    try {
+      const token = localStorage.getItem("moas_auth_token");
+      const authHeaders: Record<string, string> = token ? { Authorization: `Bearer ${token}` } : {};
+
+      if (selectedFile) {
+        // Multipart/form-data upload
+        const formData = new FormData();
+        formData.append("photo", selectedFile, "avatar.jpg");
+
+        const res = await fetch("/api/v1/users/photo", {
+          method: "POST",
+          headers: authHeaders,
+          body: formData,
+        });
+
+        const data = await res.json();
+        if (!res.ok || !data.success) {
+          throw new Error(data.message || data.error || "Failed to upload photo to storage.");
+        }
+
+        onPhotoSelected(data.avatarUrl || data.data?.avatarUrl || selectedPhoto);
+      } else if (selectedPhoto.startsWith("http://") || selectedPhoto.startsWith("https://")) {
+        // Preset URL
+        const res = await fetch("/api/v1/users/photo", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            ...authHeaders,
+          },
+          body: JSON.stringify({ photoUrl: selectedPhoto }),
+        });
+
+        const data = await res.json();
+        if (!res.ok || !data.success) {
+          throw new Error(data.message || data.error || "Failed to update profile photo.");
+        }
+
+        onPhotoSelected(selectedPhoto);
+      }
+
       stopCamera();
       onClose();
+    } catch (err: any) {
+      console.error("[PhotoUploadModal] apply error:", err);
+      setErrorMessage(err.message || "Failed to save photo. Please try again.");
+    } finally {
+      setIsUploading(false);
+    }
+  };
+
+  // Remove photo handler
+  const handleRemovePhoto = async () => {
+    setIsUploading(true);
+    setErrorMessage(null);
+
+    try {
+      const token = localStorage.getItem("moas_auth_token");
+      const res = await fetch("/api/v1/users/photo", {
+        method: "DELETE",
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
+      });
+
+      const data = await res.json();
+      if (!res.ok || !data.success) {
+        throw new Error(data.message || data.error || "Failed to remove photo.");
+      }
+
+      onPhotoSelected(data.user?.avatarUrl || data.data?.user?.avatarUrl || "");
+      stopCamera();
+      onClose();
+    } catch (err: any) {
+      console.error("[PhotoUploadModal] remove error:", err);
+      setErrorMessage(err.message || "Failed to remove photo.");
+    } finally {
+      setIsUploading(false);
     }
   };
 
@@ -281,6 +372,14 @@ export const PhotoUploadModal: React.FC<PhotoUploadModalProps> = ({
           </div>
         </div>
 
+        {/* Error message banner */}
+        {errorMessage && (
+          <div className="mx-6 mt-3 p-3 bg-red-50 border border-red-200 rounded-xl flex items-center gap-2 text-xs text-red-800 font-semibold animate-in fade-in">
+            <AlertCircle className="w-4 h-4 text-red-600 shrink-0" />
+            <span>{errorMessage}</span>
+          </div>
+        )}
+
         {/* Tab Content */}
         <div className="p-6 overflow-y-auto space-y-5 flex-1">
           {activeTab === "library" ? (
@@ -301,7 +400,7 @@ export const PhotoUploadModal: React.FC<PhotoUploadModalProps> = ({
                 <input
                   ref={fileInputRef}
                   type="file"
-                  accept="image/*"
+                  accept="image/jpeg,image/png,image/webp"
                   onChange={handleFileChange}
                   className="hidden"
                 />
@@ -312,7 +411,7 @@ export const PhotoUploadModal: React.FC<PhotoUploadModalProps> = ({
                   Click to browse or drag & drop your photo
                 </p>
                 <p className="text-[11px] text-slate-500 mt-1">
-                  Supports PNG, JPG, JPEG, WEBP (Max 5MB)
+                  Supports PNG, JPG, JPEG, WEBP (Max 2MB) • Stored securely
                 </p>
                 <button
                   type="button"
@@ -327,7 +426,7 @@ export const PhotoUploadModal: React.FC<PhotoUploadModalProps> = ({
                 <div className="flex items-center justify-between mb-2.5">
                   <label className="text-xs font-bold text-slate-700 uppercase tracking-wider flex items-center gap-1.5">
                     <Sparkles className="w-3.5 h-3.5 text-teal-600" />
-                    <span>Or Select from Library Presets</span>
+                    <span>Or Select from Curated Presets</span>
                   </label>
                 </div>
                 <div className="grid grid-cols-6 gap-2.5">
@@ -335,9 +434,13 @@ export const PhotoUploadModal: React.FC<PhotoUploadModalProps> = ({
                     <button
                       key={idx}
                       type="button"
-                      onClick={() => setSelectedPhoto(url)}
+                      onClick={() => {
+                        setSelectedPhoto(url);
+                        setSelectedFile(null);
+                        setErrorMessage(null);
+                      }}
                       className={`relative aspect-square rounded-xl overflow-hidden border-2 transition-all cursor-pointer group ${
-                        selectedPhoto === url
+                        selectedPhoto === url && !selectedFile
                           ? "border-teal-600 ring-2 ring-teal-500/30 scale-105"
                           : "border-slate-200 hover:border-teal-300"
                       }`}
@@ -348,7 +451,7 @@ export const PhotoUploadModal: React.FC<PhotoUploadModalProps> = ({
                         referrerPolicy="no-referrer"
                         className="w-full h-full object-cover group-hover:scale-105 transition-transform"
                       />
-                      {selectedPhoto === url && (
+                      {selectedPhoto === url && !selectedFile && (
                         <div className="absolute inset-0 bg-teal-800/40 flex items-center justify-center text-white">
                           <Check className="w-4 h-4" />
                         </div>
@@ -469,24 +572,38 @@ export const PhotoUploadModal: React.FC<PhotoUploadModalProps> = ({
           )}
 
           {/* Current Selection Live Preview */}
-          <div className="pt-4 border-t border-slate-100 flex items-center gap-4 bg-slate-50 p-3.5 rounded-2xl">
-            <div className="relative shrink-0">
-              <img
-                src={selectedPhoto}
-                alt="Selected preview"
-                referrerPolicy="no-referrer"
-                className="w-14 h-14 rounded-2xl object-cover border-2 border-white shadow-xs"
-              />
-              <span className="absolute -bottom-1 -right-1 p-0.5 bg-teal-600 text-white rounded-full">
-                <Check className="w-3 h-3" />
-              </span>
+          <div className="pt-4 border-t border-slate-100 flex items-center justify-between gap-4 bg-slate-50 p-3.5 rounded-2xl">
+            <div className="flex items-center gap-3 min-w-0">
+              <div className="relative shrink-0">
+                <img
+                  src={selectedPhoto}
+                  alt="Selected preview"
+                  referrerPolicy="no-referrer"
+                  className="w-14 h-14 rounded-2xl object-cover border-2 border-white shadow-xs"
+                />
+                <span className="absolute -bottom-1 -right-1 p-0.5 bg-teal-600 text-white rounded-full">
+                  <Check className="w-3 h-3" />
+                </span>
+              </div>
+              <div className="min-w-0">
+                <p className="text-xs font-bold text-slate-800">Preview Profile Photo</p>
+                <p className="text-[11px] text-slate-500 truncate">
+                  Permanently linked to your PostgreSQL profile
+                </p>
+              </div>
             </div>
-            <div className="min-w-0">
-              <p className="text-xs font-bold text-slate-800">Preview Profile Photo</p>
-              <p className="text-[11px] text-slate-500 truncate">
-                This image will appear across your applications, resume, and dashboard
-              </p>
-            </div>
+
+            {/* Remove Photo Option */}
+            <button
+              type="button"
+              onClick={handleRemovePhoto}
+              disabled={isUploading}
+              className="text-xs text-red-600 hover:text-red-700 font-bold px-3 py-1.5 rounded-lg border border-red-200 hover:bg-red-50 transition-colors flex items-center gap-1 shrink-0 cursor-pointer disabled:opacity-50"
+              title="Remove custom photo and reset to initials avatar"
+            >
+              <Trash2 className="w-3.5 h-3.5" />
+              <span>Remove</span>
+            </button>
           </div>
         </div>
 
@@ -498,17 +615,23 @@ export const PhotoUploadModal: React.FC<PhotoUploadModalProps> = ({
               stopCamera();
               onClose();
             }}
-            className="px-4 py-2 bg-white hover:bg-slate-100 border border-slate-200 text-slate-700 rounded-xl text-xs font-bold transition-colors cursor-pointer"
+            disabled={isUploading}
+            className="px-4 py-2 bg-white hover:bg-slate-100 border border-slate-200 text-slate-700 rounded-xl text-xs font-bold transition-colors cursor-pointer disabled:opacity-50"
           >
             Cancel
           </button>
           <button
             type="button"
             onClick={handleApply}
-            className="px-5 py-2 bg-teal-700 hover:bg-teal-800 text-white rounded-xl text-xs font-bold shadow-sm transition-all flex items-center gap-1.5 cursor-pointer"
+            disabled={isUploading}
+            className="px-5 py-2 bg-teal-700 hover:bg-teal-800 text-white rounded-xl text-xs font-bold shadow-sm transition-all flex items-center gap-1.5 cursor-pointer disabled:opacity-75"
           >
-            <Check className="w-3.5 h-3.5" />
-            <span>Apply Photo</span>
+            {isUploading ? (
+              <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+            ) : (
+              <Check className="w-3.5 h-3.5" />
+            )}
+            <span>{isUploading ? "Saving Photo..." : "Apply Photo"}</span>
           </button>
         </div>
       </div>

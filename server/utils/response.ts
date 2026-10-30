@@ -25,9 +25,11 @@ export function sendSuccess<T = any>(
     message = messageOrStatus;
   }
 
+  const isObject = data !== undefined && typeof data === "object" && !Array.isArray(data);
   const payload: ApiResponse<T> = {
     success: true,
-    ...(data !== undefined ? (typeof data === "object" && !Array.isArray(data) ? data : { data }) : {}),
+    ...(isObject ? data : { data }),
+    data: isObject && "data" in (data as any) ? (data as any).data : data,
     ...(message ? { message } : {}),
     ...extra,
   };

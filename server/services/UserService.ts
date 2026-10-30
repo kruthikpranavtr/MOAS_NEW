@@ -1,8 +1,18 @@
 import { userRepository } from "../repositories/UserRepository.js";
-import { UserRecord, SanitizedUser, UserRole } from "../models/types.js";
+import { UserRecord, SanitizedUser, UserRole, CandidateProfileRecord } from "../models/types.js";
 import { hashPassword, sanitizeUser } from "../utils/crypto.js";
 import { createSessionRecord } from "../middleware/auth.js";
 import { auditLogger } from "../utils/auditLogger.js";
+import {
+  validateAvatarBuffer,
+  saveAvatarFile,
+  deleteStorageFile,
+  AVATARS_STORAGE_DIR,
+} from "../utils/storage.js";
+import {
+  profileCompletenessService,
+  ProfileCompletenessResult,
+} from "./ProfileCompletenessService.js";
 
 export class UserService {
   async getAllUsers(): Promise<SanitizedUser[]> {
@@ -122,11 +132,32 @@ export class UserService {
       skills: updates.skills || existing.skills,
       experienceLevel: updates.experienceLevel !== undefined ? updates.experienceLevel : existing.experienceLevel,
       education: updates.education || existing.education,
+      workExperience: updates.workExperience || existing.workExperience,
+      projects: updates.projects || existing.projects,
+      certifications: updates.certifications || existing.certifications,
+      preferredCategories: updates.preferredCategories || existing.preferredCategories,
+      preferredLocation: updates.preferredLocation !== undefined ? updates.preferredLocation : existing.preferredLocation,
       resumes: updates.resumes || existing.resumes,
       updatedAt: new Date().toISOString(),
     };
 
     const saved = await userRepository.save(updatedUser);
+
+    // Sync candidate profile if this is a candidate
+    if (saved.role.toLowerCase() === "candidate" || saved.role.toLowerCase() === "jobseeker") {
+      await userRepository.saveCandidateProfile({
+        userId: saved.id,
+        headline: saved.quote || saved.role,
+        bio: saved.aboutMe,
+        skills: saved.skills || [],
+        education: saved.education || [],
+        workExperience: saved.workExperience || [],
+        projects: saved.projects || [],
+        certifications: saved.certifications || [],
+        preferredLocation: saved.location,
+      });
+    }
+
     return sanitizeUser(saved)!;
   }
 
@@ -165,6 +196,79 @@ export class UserService {
     return sanitizeUser(saved)!;
   }
 
+  /**
+   * Uploads and validates an avatar photo, saving it to private storage and updating user record.
+   */
+  async uploadPhoto(
+    userId: string,
+    buffer: Buffer
+  ): Promise<{ avatarUrl: string; user: SanitizedUser; completeness: ProfileCompletenessResult }> {
+    const user = await userRepository.getByIdOrEmail(userId);
+    if (!user) {
+      throw new Error(`User with ID "${userId}" not found.`);
+    }
+
+    // 1. Validate image format and magic bytes (JPEG/PNG/WEBP <= 2MB)
+    const validation = validateAvatarBuffer(buffer);
+    if (!validation.valid || !validation.detectedType) {
+      throw new Error(validation.error || "Invalid avatar image file.");
+    }
+
+    // 2. Remove old custom avatar from disk if one was previously uploaded
+    if (user.avatarStorageKey) {
+      await deleteStorageFile(AVATARS_STORAGE_DIR, user.avatarStorageKey);
+    }
+
+    // 3. Save new file to storage
+    const { storageKey } = await saveAvatarFile(buffer, userId, validation.detectedType as any);
+    const avatarUrl = `/api/v1/users/${userId}/photo?t=${Date.now()}`;
+
+    // 4. Update in PostgreSQL
+    const updated = await userRepository.updatePhoto(userId, avatarUrl, storageKey);
+    if (!updated) {
+      throw new Error("Failed to update profile photo.");
+    }
+
+    // 5. Recalculate profile completeness
+    const completeness = await this.getProfileCompleteness(userId);
+
+    return {
+      avatarUrl,
+      user: sanitizeUser(updated)!,
+      completeness,
+    };
+  }
+
+  /**
+   * Removes custom profile photo, reverting to initials or default avatar.
+   */
+  async removePhoto(userId: string): Promise<{ user: SanitizedUser; completeness: ProfileCompletenessResult }> {
+    const user = await userRepository.getByIdOrEmail(userId);
+    if (!user) {
+      throw new Error(`User with ID "${userId}" not found.`);
+    }
+
+    if (user.avatarStorageKey) {
+      await deleteStorageFile(AVATARS_STORAGE_DIR, user.avatarStorageKey);
+    }
+
+    const defaultAvatarUrl = `https://ui-avatars.com/api/?name=${encodeURIComponent(user.name)}&background=0D9488&color=ffffff&bold=true`;
+    const updated = await userRepository.updatePhoto(userId, defaultAvatarUrl, "");
+    if (!updated) {
+      throw new Error("Failed to remove profile photo.");
+    }
+
+    const completeness = await this.getProfileCompleteness(userId);
+
+    return {
+      user: sanitizeUser(updated)!,
+      completeness,
+    };
+  }
+
+  /**
+   * Simple photo URL update for presets or backward compatibility.
+   */
   async updatePhoto(id: string, avatarUrl: string): Promise<SanitizedUser | null> {
     const user = await userRepository.getByIdOrEmail(id);
     if (!user) return null;
@@ -172,6 +276,98 @@ export class UserService {
     user.updatedAt = new Date().toISOString();
     const saved = await userRepository.save(user);
     return sanitizeUser(saved);
+  }
+
+  /**
+   * Retrieves candidate profile record with structured sections.
+   */
+  async getCandidateProfile(userId: string): Promise<CandidateProfileRecord | null> {
+    return await userRepository.getCandidateProfile(userId);
+  }
+
+  /**
+   * Saves candidate profile and updates completeness.
+   */
+  async updateCandidateProfile(
+    userId: string,
+    updates: Partial<CandidateProfileRecord>,
+    caller: { userId: string; role: string }
+  ): Promise<{ profile: CandidateProfileRecord; user: SanitizedUser; completeness: ProfileCompletenessResult }> {
+    const callerRole = (caller.role || "").toLowerCase();
+    const callerId = caller.userId.toLowerCase();
+
+    if (callerRole !== "admin" && callerId !== userId.toLowerCase()) {
+      throw new Error("Forbidden: You can only edit your own candidate profile.");
+    }
+
+    const user = await userRepository.getByIdOrEmail(userId);
+    if (!user) {
+      throw new Error(`User with ID "${userId}" not found.`);
+    }
+
+    const existingProfile = await userRepository.getCandidateProfile(userId);
+    const resumes = await userRepository.getResumes(userId);
+
+    // Merge updates
+    const mergedProfile: Partial<CandidateProfileRecord> & { userId: string } = {
+      ...existingProfile,
+      ...updates,
+      userId,
+    };
+
+    // Calculate real completeness
+    const completeness = profileCompletenessService.calculate(
+      {
+        ...user,
+        location: updates.preferredLocation || user.location,
+        aboutMe: updates.bio || user.aboutMe,
+        skills: updates.skills || user.skills,
+        education: updates.education || user.education,
+        workExperience: updates.workExperience || user.workExperience,
+      },
+      mergedProfile,
+      resumes
+    );
+
+    mergedProfile.completenessScore = completeness.score;
+    mergedProfile.missingSections = completeness.missingSections;
+
+    // Update core user record if user fields are present in updates
+    const updatedUser: UserRecord = {
+      ...user,
+      name: (updates as any).name !== undefined ? (updates as any).name : user.name,
+      headline: updates.headline !== undefined ? updates.headline : user.headline,
+      aboutMe: updates.bio !== undefined ? updates.bio : (updates as any).aboutMe !== undefined ? (updates as any).aboutMe : user.aboutMe,
+      phone: (updates as any).phone !== undefined ? (updates as any).phone : user.phone,
+      location: (updates as any).location !== undefined ? (updates as any).location : updates.preferredLocation || user.location,
+      skills: (updates as any).skills !== undefined ? (updates as any).skills : user.skills,
+      education: (updates as any).education !== undefined ? (updates as any).education : user.education,
+      workExperience: updates.workExperience !== undefined ? updates.workExperience : user.workExperience,
+    };
+    await userRepository.save(updatedUser);
+
+    const saved = await userRepository.saveCandidateProfile(mergedProfile);
+
+    return {
+      profile: saved,
+      user: sanitizeUser(updatedUser)!,
+      completeness,
+    };
+  }
+
+  /**
+   * Calculates profile completeness for a user.
+   */
+  async getProfileCompleteness(userId: string): Promise<ProfileCompletenessResult> {
+    const user = await userRepository.getByIdOrEmail(userId);
+    if (!user) {
+      throw new Error(`User with ID "${userId}" not found.`);
+    }
+
+    const candidateProfile = await userRepository.getCandidateProfile(userId);
+    const resumes = await userRepository.getResumes(userId);
+
+    return profileCompletenessService.calculate(user, candidateProfile, resumes);
   }
 }
 

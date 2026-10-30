@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import {
   X,
   MapPin,
@@ -60,6 +60,16 @@ export const JobDetailsModal: React.FC<JobDetailsModalProps> = ({
   // Agentic AI State
   const [agentResult, setAgentResult] = useState<AgentRunResult | null>(null);
   const [isAgentRunning, setIsAgentRunning] = useState(false);
+
+  // Auto-select primary resume if available
+  useEffect(() => {
+    if (user.resumes && user.resumes.length > 0) {
+      const primary = user.resumes.find((r) => r.isPrimary);
+      if (!selectedResume || !user.resumes.some((r) => r.name === selectedResume)) {
+        setSelectedResume(primary ? primary.name : user.resumes[0].name);
+      }
+    }
+  }, [user.resumes, isOpen]);
 
   if (!isOpen) return null;
 
@@ -299,33 +309,46 @@ export const JobDetailsModal: React.FC<JobDetailsModalProps> = ({
                   Select Resume to Send
                 </label>
                 <div className="space-y-2">
-                  {user.resumes.map((res) => (
-                    <label
-                      key={res.id}
-                      className={`flex items-center justify-between p-3.5 rounded-2xl border cursor-pointer transition-all ${
-                        selectedResume === res.name
-                          ? "bg-teal-50/70 border-teal-500"
-                          : "bg-white border-slate-200 hover:bg-slate-50"
-                      }`}
-                    >
-                      <div className="flex items-center gap-3">
-                        <FileText className="w-4 h-4 text-teal-700" />
-                        <div>
-                          <p className="text-xs font-bold text-slate-900">{res.name}</p>
-                          <p className="text-[10px] text-slate-400">
-                            {res.type} • {res.size} • Last updated {res.updatedAt}
-                          </p>
+                  {!user.resumes || user.resumes.length === 0 ? (
+                    <div className="p-4 rounded-2xl bg-amber-50 border border-amber-200 text-amber-800 text-xs">
+                      No uploaded resumes found. Please upload a resume in the Resume & CV section before applying.
+                    </div>
+                  ) : (
+                    user.resumes.map((res) => (
+                      <label
+                        key={res.id}
+                        className={`flex items-center justify-between p-3.5 rounded-2xl border cursor-pointer transition-all ${
+                          selectedResume === res.name
+                            ? "bg-teal-50/70 border-teal-500"
+                            : "bg-white border-slate-200 hover:bg-slate-50"
+                        }`}
+                      >
+                        <div className="flex items-center gap-3">
+                          <FileText className="w-4 h-4 text-teal-700" />
+                          <div>
+                            <div className="flex items-center gap-2">
+                              <p className="text-xs font-bold text-slate-900">{res.name}</p>
+                              {res.isPrimary && (
+                                <span className="px-1.5 py-0.5 rounded-md bg-teal-100 text-teal-800 text-[10px] font-bold">
+                                  Primary
+                                </span>
+                              )}
+                            </div>
+                            <p className="text-[10px] text-slate-400">
+                              {res.type} • {res.size} • Last updated {res.updatedAt}
+                            </p>
+                          </div>
                         </div>
-                      </div>
-                      <input
-                        type="radio"
-                        name="selectedResume"
-                        checked={selectedResume === res.name}
-                        onChange={() => setSelectedResume(res.name)}
-                        className="w-4 h-4 text-teal-600 focus:ring-teal-500"
-                      />
-                    </label>
-                  ))}
+                        <input
+                          type="radio"
+                          name="selectedResume"
+                          checked={selectedResume === res.name}
+                          onChange={() => setSelectedResume(res.name)}
+                          className="w-4 h-4 text-teal-600 focus:ring-teal-500"
+                        />
+                      </label>
+                    ))
+                  )}
                 </div>
               </div>
 

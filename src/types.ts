@@ -146,6 +146,7 @@ export interface ResumeItem {
   isPrimary: boolean;
   dataUrl?: string;
   storageKey?: string;
+  originalFilename?: string;
 }
 
 export interface RegisteredUser {
@@ -195,13 +196,49 @@ export interface UserProfile {
   companySize?: string;
   contactPerson?: string;
   companyWebsite?: string;
-  education?: {
-    id: string;
-    degree: string;
-    institution: string;
-    year?: string;
-  }[];
+  education?: CandidateEducation[];
+  workExperience?: CandidateWorkExperience[];
+  projects?: CandidateProject[];
+  certifications?: CandidateCertification[];
+  preferredCategories?: string[];
+  preferredLocation?: string;
+  desiredSalary?: string;
+  missingSections?: string[];
   resumes: ResumeItem[];
+}
+
+export interface CandidateEducation {
+  id: string;
+  degree: string;
+  institution: string;
+  year?: string;
+  fieldOfStudy?: string;
+}
+
+export interface CandidateWorkExperience {
+  id: string;
+  title: string;
+  company: string;
+  startDate: string;
+  endDate?: string;
+  current?: boolean;
+  description?: string;
+}
+
+export interface CandidateProject {
+  id: string;
+  title: string;
+  description: string;
+  url?: string;
+  technologies?: string[];
+}
+
+export interface CandidateCertification {
+  id: string;
+  name: string;
+  issuer: string;
+  issueDate: string;
+  credentialUrl?: string;
 }
 
 export interface Company {

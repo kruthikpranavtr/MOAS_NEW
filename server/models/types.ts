@@ -10,6 +10,67 @@ export interface ResumeItem {
   dataUrl?: string;
   storageKey?: string;
   userId?: string;
+  originalFilename?: string;
+  mimeType?: string;
+  fileSizeBytes?: number;
+  parsedText?: string;
+}
+
+export interface CandidateEducation {
+  id: string;
+  degree: string;
+  institution: string;
+  year?: string;
+  fieldOfStudy?: string;
+}
+
+export interface CandidateWorkExperience {
+  id: string;
+  title: string;
+  company: string;
+  startDate: string;
+  endDate?: string;
+  current?: boolean;
+  description?: string;
+}
+
+export interface CandidateProject {
+  id: string;
+  title: string;
+  description: string;
+  url?: string;
+  technologies?: string[];
+}
+
+export interface CandidateCertification {
+  id: string;
+  name: string;
+  issuer: string;
+  issueDate: string;
+  credentialUrl?: string;
+}
+
+export interface CandidateProfileRecord {
+  id: string;
+  userId: string;
+  headline?: string;
+  bio?: string;
+  experienceYears?: number;
+  skills: string[];
+  education: CandidateEducation[];
+  workExperience: CandidateWorkExperience[];
+  projects: CandidateProject[];
+  certifications: CandidateCertification[];
+  preferredCategories: string[];
+  preferredLocation?: string;
+  desiredSalary?: string;
+  portfolioUrl?: string;
+  githubUrl?: string;
+  linkedinUrl?: string;
+  completenessScore: number;
+  missingSections: string[];
+  createdAt?: string;
+  updatedAt?: string;
 }
 
 export interface UserRecord {
@@ -27,12 +88,19 @@ export interface UserRecord {
   contactPerson?: string;
   companyWebsite?: string;
   avatarUrl: string;
+  avatarStorageKey?: string;
   location: string;
   quote?: string;
+  headline?: string;
   aboutMe?: string;
   skills?: string[];
   experienceLevel?: string;
-  education?: any[];
+  education?: CandidateEducation[];
+  workExperience?: CandidateWorkExperience[];
+  projects?: CandidateProject[];
+  certifications?: CandidateCertification[];
+  preferredCategories?: string[];
+  preferredLocation?: string;
   resumes?: ResumeItem[];
   emailVerified?: boolean;
   phoneVerified?: boolean;

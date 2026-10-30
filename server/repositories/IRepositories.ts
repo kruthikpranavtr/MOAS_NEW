@@ -8,6 +8,7 @@ import {
   JobAlertRecord,
   ProfileViewRecord,
   ResumeItem,
+  CandidateProfileRecord,
 } from "../models/types.js";
 
 export interface IJobRepository {
@@ -29,9 +30,14 @@ export interface IUserRepository {
   getAll(): Promise<UserRecord[]>;
   getByIdOrEmail(idOrEmail: string): Promise<UserRecord | null>;
   save(user: UserRecord): Promise<UserRecord>;
-  updatePhoto(userId: string, avatarUrl: string): Promise<UserRecord | null>;
+  updatePhoto(userId: string, avatarUrl: string, storageKey?: string): Promise<UserRecord | null>;
   getResumes(userId: string): Promise<ResumeItem[]>;
+  getResumeById(id: string): Promise<ResumeItem | null>;
   saveResume(resume: ResumeItem): Promise<ResumeItem>;
+  setPrimaryResume(userId: string, resumeId: string): Promise<ResumeItem | null>;
+  deleteResume(userId: string, resumeId: string): Promise<{ deleted: boolean; storageKey?: string; newPrimaryId?: string }>;
+  getCandidateProfile(userId: string): Promise<CandidateProfileRecord | null>;
+  saveCandidateProfile(profile: Partial<CandidateProfileRecord> & { userId: string }): Promise<CandidateProfileRecord>;
 }
 
 export interface ICompanyRepository {

@@ -100,14 +100,25 @@ legacyRouter.post("/moas/profile-views/reset", requireAuth, (req, res) => profil
 // ==========================================
 // 8. USERS & PROFILES (Legacy /api/moas/users/*)
 // ==========================================
+import multer from "multer";
+const legacyUploadResume = multer({ storage: multer.memoryStorage(), limits: { fileSize: 5 * 1024 * 1024 } });
+const legacyUploadPhoto = multer({ storage: multer.memoryStorage(), limits: { fileSize: 2 * 1024 * 1024 } });
+
 legacyRouter.get("/moas/users", (req, res) => userController.getAllUsers(req, res));
 legacyRouter.get("/moas/users/:id", (req, res) => userController.getUserById(req, res));
 legacyRouter.put("/moas/users/:id", requireAuth, (req, res) => userController.updateProfile(req, res));
 legacyRouter.patch("/moas/users/:id/role", requireAuth, requireAdmin, (req, res) => userController.updateUserRole(req, res));
 legacyRouter.post("/moas/users", authRateLimiter, (req, res) => userController.registerUser(req, res));
-legacyRouter.post("/moas/upload-resume", requireAuth, (req, res) => resumeController.uploadResume(req, res));
+legacyRouter.post("/moas/upload-resume", requireAuth, legacyUploadResume.single("resumeFile"), (req, res) => {
+  if ((req as any).file) {
+    return resumeController.uploadResumeFile(req, res);
+  }
+  return resumeController.uploadResume(req, res);
+});
 legacyRouter.get("/moas/resumes/:id", requireAuth, (req, res) => resumeController.getResumeById(req, res));
-legacyRouter.post("/moas/update-photo", requireAuth, (req, res) => userController.updatePhoto(req, res));
+legacyRouter.get("/moas/resumes/:id/download", requireAuth, (req, res) => resumeController.downloadResume(req, res));
+legacyRouter.post("/moas/update-photo", requireAuth, legacyUploadPhoto.single("photo"), (req, res) => userController.updatePhoto(req, res));
+legacyRouter.get("/moas/users/:id/photo", (req, res) => userController.getPhoto(req, res));
 
 // ==========================================
 // 9. AI SERVICES (Legacy /api/moas/ai-*, rag-*, agent-run)
