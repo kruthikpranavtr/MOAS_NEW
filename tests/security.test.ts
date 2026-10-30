@@ -301,3 +301,7 @@ test("MOAS Security & Production Runtime Test Suite", async (t) => {
     assert.equal(postLogoutMe.status, 401);
   });
 });
+
+test.after(() => {
+  setTimeout(() => process.exit(0), 100).unref();
+});
