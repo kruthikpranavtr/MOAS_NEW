@@ -180,6 +180,15 @@ export class UserRepository implements IUserRepository {
     return res.rows.map(mapRowToResume);
   }
 
+  async getResumeById(id: string): Promise<ResumeItem | null> {
+    const res = await query(
+      "SELECT * FROM resumes WHERE id = $1 OR user_id = $1 ORDER BY created_at DESC LIMIT 1;",
+      [id]
+    );
+    if (res.rows.length === 0) return null;
+    return mapRowToResume(res.rows[0]);
+  }
+
   async saveResume(resume: ResumeItem): Promise<ResumeItem> {
     const userId = resume.userId || "anonymous";
     const res = await query(

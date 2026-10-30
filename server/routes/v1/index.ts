@@ -13,6 +13,7 @@ import aiRoutes from "./ai.routes.js";
 import databaseRoutes from "./database.routes.js";
 import messagingRoutes from "./messaging.routes.js";
 import notificationsRoutes from "./notifications.routes.js";
+import adminRoutes from "./admin.routes.js";
 
 const v1Router = Router();
 
@@ -30,5 +31,6 @@ v1Router.use("/ai", aiRoutes);
 v1Router.use("/db", databaseRoutes);
 v1Router.use("/messages", messagingRoutes);
 v1Router.use("/notifications", notificationsRoutes);
+v1Router.use("/admin", adminRoutes);
 
 export default v1Router;

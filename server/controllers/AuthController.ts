@@ -45,7 +45,8 @@ export class AuthController {
 
   async login(req: Request, res: Response) {
     try {
-      const { identifier, password, rememberMe } = req.body;
+      const identifier = req.body.identifier || req.body.username || req.body.email || req.body.userId;
+      const { password, rememberMe } = req.body;
       if (!identifier || !password) {
         return sendError(res, "User ID / email / username and password are required.", 400);
       }

@@ -5,10 +5,13 @@ import { validateBody } from "../../middleware/validator.js";
 
 const router = Router();
 
-router.get("/", (req, res) => applicationController.getApplications(req, res));
+router.get("/", requireAuth, (req, res) => applicationController.getApplications(req, res));
+router.get("/:id", requireAuth, (req, res) => applicationController.getApplicationById(req, res));
+
 router.post("/", requireAuth, validateBody(["jobId"]), (req, res) =>
   applicationController.submitApplication(req, res)
 );
+
 router.patch(
   "/:id",
   requireAuth,
@@ -16,6 +19,7 @@ router.patch(
   validateBody(["status"]),
   (req, res) => applicationController.updateStatus(req, res)
 );
+
 router.delete("/:id", requireAuth, (req, res) => applicationController.deleteApplication(req, res));
 
 export default router;

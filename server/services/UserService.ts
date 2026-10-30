@@ -1,7 +1,8 @@
 import { userRepository } from "../repositories/UserRepository.js";
-import { UserRecord, SanitizedUser } from "../models/types.js";
+import { UserRecord, SanitizedUser, UserRole } from "../models/types.js";
 import { hashPassword, sanitizeUser } from "../utils/crypto.js";
 import { createSessionRecord } from "../middleware/auth.js";
+import { auditLogger } from "../utils/auditLogger.js";
 
 export class UserService {
   async getAllUsers(): Promise<SanitizedUser[]> {
@@ -33,6 +34,10 @@ export class UserService {
     const rawPass = data.password ? String(data.password).trim() : "User@2026!";
     const hashedPassword = rawPass.startsWith("scrypt:") ? rawPass : hashPassword(rawPass);
 
+    // Prevent Admin self-registration: only Candidate or Employer allowed on public registration
+    const requestedRole = (data.role || "").toLowerCase();
+    const safeRole: UserRole = requestedRole === "employer" ? "Employer" : "Candidate";
+
     const userToSave: UserRecord = {
       id: permanentId,
       username: username || existing?.username || permanentId.toLowerCase(),
@@ -40,7 +45,7 @@ export class UserService {
       name: data.name || existing?.name || "New User",
       email: email || existing?.email || `${permanentId.toLowerCase()}@moas.internal`,
       phone: data.phone || existing?.phone || "+91 98000 00000",
-      role: data.role || existing?.role || "Candidate",
+      role: existing ? existing.role : safeRole, // Never allow role escalation on upsert
       companyName: data.companyName !== undefined ? data.companyName : existing?.companyName,
       companyEmail: data.companyEmail !== undefined ? data.companyEmail : existing?.companyEmail,
       industry: data.industry !== undefined ? data.industry : existing?.industry,
@@ -68,42 +73,56 @@ export class UserService {
     };
   }
 
-  async updateProfile(id: string, updates: Partial<UserRecord>): Promise<SanitizedUser> {
-    return await this.updateUserProfile(id, updates);
+  async updateProfile(
+    id: string,
+    updates: Partial<UserRecord>,
+    caller?: { userId: string; role: string }
+  ): Promise<SanitizedUser> {
+    return await this.updateUserProfile(id, updates, caller);
   }
 
-  async updateUserProfile(id: string, updates: Partial<UserRecord>): Promise<SanitizedUser> {
+  async updateUserProfile(
+    id: string,
+    updates: Partial<UserRecord>,
+    caller?: { userId: string; role: string }
+  ): Promise<SanitizedUser> {
     const existing = await userRepository.getByIdOrEmail(id);
+    if (!existing) {
+      throw new Error(`User with ID "${id}" not found`);
+    }
 
-    let resolvedPassword = existing?.password;
-    if (updates.password) {
-      const cleanPass = String(updates.password).trim();
-      resolvedPassword = cleanPass.startsWith("scrypt:") ? cleanPass : hashPassword(cleanPass);
+    const callerRole = (caller?.role || "").toLowerCase();
+
+    // Mass-assignment & Privilege Escalation Protection:
+    // Only administrators may alter a user's role. Normal users' attempts to change role are ignored.
+    let resolvedRole = existing.role;
+    if (updates.role && callerRole === "admin") {
+      resolvedRole = updates.role;
     }
 
     const updatedUser: UserRecord = {
-      id,
-      name: updates.name !== undefined ? updates.name : (existing?.name || "User"),
-      email: updates.email !== undefined ? updates.email : (existing?.email || `${id}@moas.internal`),
-      phone: updates.phone !== undefined ? updates.phone : (existing?.phone || "+91 98000 00000"),
-      role: updates.role !== undefined ? updates.role : (existing?.role || "Candidate"),
-      password: resolvedPassword,
-      username: updates.username !== undefined ? updates.username : existing?.username,
-      companyName: updates.companyName !== undefined ? updates.companyName : existing?.companyName,
-      companyEmail: updates.companyEmail !== undefined ? updates.companyEmail : existing?.companyEmail,
-      industry: updates.industry !== undefined ? updates.industry : existing?.industry,
-      companySize: updates.companySize !== undefined ? updates.companySize : existing?.companySize,
-      contactPerson: updates.contactPerson !== undefined ? updates.contactPerson : existing?.contactPerson,
-      companyWebsite: updates.companyWebsite !== undefined ? updates.companyWebsite : existing?.companyWebsite,
-      avatarUrl: updates.avatarUrl !== undefined ? updates.avatarUrl : (existing?.avatarUrl || "https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=400&h=400&fit=crop&crop=faces"),
-      location: updates.location !== undefined ? updates.location : (existing?.location || "Bangalore, India"),
-      quote: updates.quote !== undefined ? updates.quote : existing?.quote,
-      aboutMe: updates.aboutMe !== undefined ? updates.aboutMe : existing?.aboutMe,
-      skills: updates.skills !== undefined ? updates.skills : (existing?.skills || []),
-      experienceLevel: updates.experienceLevel !== undefined ? updates.experienceLevel : existing?.experienceLevel,
-      education: updates.education !== undefined ? updates.education : existing?.education,
-      resumes: updates.resumes !== undefined ? updates.resumes : (existing?.resumes || []),
-      createdAt: existing?.createdAt || new Date().toISOString(),
+      ...existing,
+      id, // Immutable
+      role: resolvedRole,
+      password: existing.password, // Password immutable via general profile update (must use reset)
+      name: updates.name !== undefined ? updates.name : existing.name,
+      email: updates.email !== undefined ? updates.email : existing.email,
+      phone: updates.phone !== undefined ? updates.phone : existing.phone,
+      username: updates.username !== undefined ? updates.username : existing.username,
+      companyName: updates.companyName !== undefined ? updates.companyName : existing.companyName,
+      companyEmail: updates.companyEmail !== undefined ? updates.companyEmail : existing.companyEmail,
+      industry: updates.industry !== undefined ? updates.industry : existing.industry,
+      companySize: updates.companySize !== undefined ? updates.companySize : existing.companySize,
+      contactPerson: updates.contactPerson !== undefined ? updates.contactPerson : existing.contactPerson,
+      companyWebsite: updates.companyWebsite !== undefined ? updates.companyWebsite : existing.companyWebsite,
+      avatarUrl: updates.avatarUrl !== undefined ? updates.avatarUrl : existing.avatarUrl,
+      location: updates.location !== undefined ? updates.location : existing.location,
+      quote: updates.quote !== undefined ? updates.quote : existing.quote,
+      aboutMe: updates.aboutMe !== undefined ? updates.aboutMe : existing.aboutMe,
+      skills: updates.skills || existing.skills,
+      experienceLevel: updates.experienceLevel !== undefined ? updates.experienceLevel : existing.experienceLevel,
+      education: updates.education || existing.education,
+      resumes: updates.resumes || existing.resumes,
       updatedAt: new Date().toISOString(),
     };
 
@@ -111,9 +130,48 @@ export class UserService {
     return sanitizeUser(saved)!;
   }
 
-  async updatePhoto(userId: string, avatarUrl: string): Promise<SanitizedUser | null> {
-    const updated = await userRepository.updatePhoto(userId, avatarUrl);
-    return sanitizeUser(updated);
+  async updateUserRole(
+    targetUserId: string,
+    newRole: UserRole,
+    adminCaller: { userId: string; email?: string; role: string }
+  ): Promise<SanitizedUser> {
+    const validRoles: UserRole[] = ["Candidate", "Employer", "Admin"];
+    if (!validRoles.includes(newRole)) {
+      throw new Error(`Invalid role. Allowed roles: ${validRoles.join(", ")}`);
+    }
+
+    const existing = await userRepository.getByIdOrEmail(targetUserId);
+    if (!existing) {
+      throw new Error(`User with ID "${targetUserId}" not found`);
+    }
+
+    const oldRole = existing.role;
+    existing.role = newRole;
+    existing.updatedAt = new Date().toISOString();
+
+    const saved = await userRepository.save(existing);
+
+    await auditLogger.log({
+      actorId: adminCaller.userId,
+      actorEmail: adminCaller.email,
+      actorRole: adminCaller.role,
+      action: "ADMIN_USER_ROLE_UPDATED",
+      resourceType: "user",
+      resourceId: targetUserId,
+      details: { oldRole, newRole },
+      outcome: "SUCCESS",
+    });
+
+    return sanitizeUser(saved)!;
+  }
+
+  async updatePhoto(id: string, avatarUrl: string): Promise<SanitizedUser | null> {
+    const user = await userRepository.getByIdOrEmail(id);
+    if (!user) return null;
+    user.avatarUrl = avatarUrl;
+    user.updatedAt = new Date().toISOString();
+    const saved = await userRepository.save(user);
+    return sanitizeUser(saved);
   }
 }
 

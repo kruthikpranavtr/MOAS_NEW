@@ -43,8 +43,9 @@ export const Sidebar: React.FC<SidebarProps> = ({
 }) => {
   const { t } = useLanguage();
 
-  const isEmployer =
-    user?.role?.toLowerCase() === "employer";
+  const userRole = (user?.role || "").toLowerCase();
+  const isAdmin = userRole === "admin";
+  const isEmployer = userRole === "employer";
 
   // Job Seeker specific navigation
   const seekerNavItems = [
@@ -168,11 +169,27 @@ export const Sidebar: React.FC<SidebarProps> = ({
         {/* Role Identity Tag */}
         <div className="px-3.5 py-2 rounded-xl bg-slate-50 border border-slate-200/80 flex items-center justify-between text-xs">
           <span className="font-bold text-slate-700 flex items-center gap-1.5 font-mono">
-            {isEmployer ? <Building2 className="w-3.5 h-3.5 text-teal-600" /> : <User className="w-3.5 h-3.5 text-teal-600" />}
-            <span>{isEmployer ? "Employer Portal" : "Candidate Portal"}</span>
+            {isAdmin ? (
+              <ShieldCheck className="w-3.5 h-3.5 text-purple-600" />
+            ) : isEmployer ? (
+              <Building2 className="w-3.5 h-3.5 text-teal-600" />
+            ) : (
+              <User className="w-3.5 h-3.5 text-teal-600" />
+            )}
+            <span>
+              {isAdmin ? "Admin Console" : isEmployer ? "Employer Portal" : "Candidate Portal"}
+            </span>
           </span>
-          <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-teal-100/70 text-teal-800 border border-teal-200 font-mono">
-            {isEmployer ? "Hiring" : "Talent"}
+          <span
+            className={`px-2 py-0.5 rounded-full text-[10px] font-bold font-mono border ${
+              isAdmin
+                ? "bg-purple-100/70 text-purple-800 border-purple-200"
+                : isEmployer
+                ? "bg-teal-100/70 text-teal-800 border-teal-200"
+                : "bg-teal-100/70 text-teal-800 border-teal-200"
+            }`}
+          >
+            {isAdmin ? "Admin" : isEmployer ? "Hiring" : "Talent"}
           </span>
         </div>
 

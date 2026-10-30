@@ -28,8 +28,17 @@ export class JobAlertService {
     return await this.jobAlertRepo.save(newAlert);
   }
 
-  async deleteAlert(id: string): Promise<boolean> {
+  async deleteAlert(id: string, caller?: { userId: string; role: string }): Promise<boolean> {
     if (!id) throw new Error("Alert ID is required.");
+    if (caller && (this.jobAlertRepo as any).getById) {
+      const existing = await (this.jobAlertRepo as any).getById(id);
+      if (existing) {
+        const callerRole = (caller.role || "").toLowerCase();
+        if (existing.userId !== caller.userId && callerRole !== "admin") {
+          throw new Error("Forbidden: You can only delete your own job alerts.");
+        }
+      }
+    }
     return await this.jobAlertRepo.delete(id);
   }
 }

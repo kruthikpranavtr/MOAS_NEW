@@ -50,9 +50,23 @@ export class JobService {
       ...(data.logoUrl ? { logoUrl: data.logoUrl } : {}),
       ...(data.logo ? { logo: data.logo } : {}),
       ...(data.employerId ? { employerId: data.employerId } : {}),
+      ...(data.companyId ? { companyId: data.companyId } : {}),
     };
 
     return await jobRepository.save(newJob);
+  }
+
+  async updateJob(id: string, updates: Partial<JobRecord>): Promise<JobRecord | null> {
+    const existing = await jobRepository.getById(id);
+    if (!existing) return null;
+
+    const merged: JobRecord = {
+      ...existing,
+      ...updates,
+      id,
+    };
+
+    return await jobRepository.save(merged);
   }
 
   async deleteJob(id: string): Promise<boolean> {

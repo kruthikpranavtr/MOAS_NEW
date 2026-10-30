@@ -35,6 +35,54 @@ export class ApplicationRepository implements IApplicationRepository {
     return res.rows.map(mapRowToApplication);
   }
 
+  async getForEmployer(employerUserId: string, jobId?: string): Promise<ApplicationRecord[]> {
+    let sql = `
+      SELECT DISTINCT a.* 
+      FROM moas.applications a
+      JOIN moas.jobs j ON a.job_id = j.id
+      LEFT JOIN moas.company_members cm ON j.company_id = cm.company_id AND cm.user_id = $1 AND cm.is_verified = true
+      WHERE (cm.user_id IS NOT NULL OR j.posted_by = $1)
+    `;
+    const params: any[] = [employerUserId];
+
+    if (jobId) {
+      params.push(jobId);
+      sql += ` AND a.job_id = $2`;
+    }
+
+    sql += " ORDER BY a.created_at DESC;";
+    const res = await query(sql, params);
+    return res.rows.map(mapRowToApplication);
+  }
+
+  async isApplicantForEmployer(applicationId: string, employerUserId: string): Promise<boolean> {
+    const res = await query(
+      `SELECT 1 
+       FROM moas.applications a
+       JOIN moas.jobs j ON a.job_id = j.id
+       LEFT JOIN moas.company_members cm ON j.company_id = cm.company_id AND cm.user_id = $2 AND cm.is_verified = true
+       WHERE a.id = $1 AND (cm.user_id IS NOT NULL OR j.posted_by = $2)
+       LIMIT 1;`,
+      [applicationId, employerUserId]
+    );
+
+    return res.rows.length > 0;
+  }
+
+  async isCandidateApplicantForEmployer(candidateUserId: string, employerUserId: string): Promise<boolean> {
+    const res = await query(
+      `SELECT 1 
+       FROM moas.applications a
+       JOIN moas.jobs j ON a.job_id = j.id
+       LEFT JOIN moas.company_members cm ON j.company_id = cm.company_id AND cm.user_id = $2 AND cm.is_verified = true
+       WHERE a.candidate_id = $1 AND (cm.user_id IS NOT NULL OR j.posted_by = $2)
+       LIMIT 1;`,
+      [candidateUserId, employerUserId]
+    );
+
+    return res.rows.length > 0;
+  }
+
   async getById(id: string): Promise<ApplicationRecord | null> {
     const res = await query("SELECT * FROM applications WHERE id = $1 LIMIT 1;", [id]);
     if (res.rows.length === 0) return null;

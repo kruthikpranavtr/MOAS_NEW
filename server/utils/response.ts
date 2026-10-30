@@ -41,10 +41,19 @@ export function sendError(
   code?: string,
   extra: Record<string, any> = {}
 ) {
+  const defaultCode =
+    statusCode === 403
+      ? "FORBIDDEN"
+      : statusCode === 401
+      ? "UNAUTHORIZED"
+      : statusCode === 404
+      ? "NOT_FOUND"
+      : undefined;
+
   const payload: ApiResponse = {
     success: false,
     error,
-    ...(code ? { code } : {}),
+    ...(code || defaultCode ? { code: code || defaultCode } : {}),
     ...extra,
   };
   return res.status(statusCode).json(payload);

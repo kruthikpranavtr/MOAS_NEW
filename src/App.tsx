@@ -149,14 +149,15 @@ export default function App() {
         if (res.ok) {
           const data = await res.json();
           if (data.success && data.user) {
-            const isEmployer = data.user.role?.toLowerCase() === "employer";
+            const rawRole = (data.user.role || "").toLowerCase();
+            const normalizedRole = rawRole === "admin" ? "Admin" : rawRole === "employer" ? "Employer" : "Candidate";
             setUser((prev) => ({
               ...prev,
               ...data.user,
-              role: isEmployer ? "Employer" : "Candidate",
+              role: normalizedRole,
             }));
             setIsAuthenticated(true);
-            setCurrentNav(isEmployer ? "dashboard/employer" : "dashboard/jobseeker");
+            setCurrentNav(normalizedRole === "Employer" ? "dashboard/employer" : "dashboard/jobseeker");
           }
         }
       } catch (err) {
@@ -457,10 +458,12 @@ export default function App() {
       return;
     }
 
-    const isEmployer = user.role?.toLowerCase() === "employer";
+    const userRole = (user.role || "").toLowerCase();
+    const isEmployer = userRole === "employer";
+    const isAdmin = userRole === "admin";
 
-    // Route Guard 1: Job seeker trying to access employer dashboard
-    if (nav === "dashboard/employer" && !isEmployer) {
+    // Route Guard 1: Candidate trying to access employer dashboard
+    if (nav === "dashboard/employer" && !isEmployer && !isAdmin) {
       setNotifications((prev) => [
         {
           id: `guard-${Date.now()}`,
@@ -477,8 +480,8 @@ export default function App() {
       return;
     }
 
-    // Route Guard 2: Employer trying to access job seeker dashboard
-    if (nav === "dashboard/jobseeker" && isEmployer) {
+    // Route Guard 2: Employer trying to access candidate dashboard
+    if (nav === "dashboard/jobseeker" && isEmployer && !isAdmin) {
       setNotifications((prev) => [
         {
           id: `guard-${Date.now()}`,
@@ -495,6 +498,24 @@ export default function App() {
       return;
     }
 
+    // Route Guard 3: Candidate trying to access post job
+    if (nav === "post-job" && !isEmployer && !isAdmin) {
+      setNotifications((prev) => [
+        {
+          id: `guard-${Date.now()}`,
+          title: "Access Restricted",
+          message:
+            "Job posting is reserved for authorized employers and administrators. You have been redirected to Find Jobs.",
+          time: "Just now",
+          read: false,
+          type: "system",
+        },
+        ...prev,
+      ]);
+      setCurrentNav("find-jobs");
+      return;
+    }
+
     // Generic "dashboard" route alias: dynamically redirects based on role
     if (nav === "dashboard") {
       setCurrentNav(isEmployer ? "dashboard/employer" : "dashboard/jobseeker");
@@ -506,7 +527,9 @@ export default function App() {
 
   // 1. Existing User enters credentials on login: route to appropriate dashboard based on stored role
   const handleDirectLoginSuccess = (existingUser: RegisteredUser) => {
-    const isEmployer = existingUser.role?.toLowerCase() === "employer";
+    const rawRole = (existingUser.role || "").toLowerCase();
+    const normalizedRole = rawRole === "admin" ? "Admin" : rawRole === "employer" ? "Employer" : "Candidate";
+    const isEmployer = normalizedRole === "Employer";
 
     setUser((prev) => ({
       ...prev,
@@ -516,7 +539,7 @@ export default function App() {
       name: existingUser.name,
       email: existingUser.email,
       phone: existingUser.phone,
-      role: isEmployer ? "Employer" : "Candidate",
+      role: normalizedRole,
       companyName: existingUser.companyName || prev.companyName,
       companyEmail: existingUser.companyEmail || prev.companyEmail,
       industry: existingUser.industry || prev.industry,
@@ -633,8 +656,11 @@ export default function App() {
         password: pendingUser.password,
         name: pendingUser.name,
         email: pendingUser.email,
-        phone: pendingUser.phone,
-        role: isEmployer ? "Employer" : "Candidate",
+        role: pendingUser.role?.toLowerCase() === "admin"
+          ? "Admin"
+          : pendingUser.role?.toLowerCase() === "employer"
+          ? "Employer"
+          : "Candidate",
         companyName: pendingUser.companyName || prev.companyName,
         companyEmail: pendingUser.companyEmail || prev.companyEmail,
         industry: pendingUser.industry || prev.industry,

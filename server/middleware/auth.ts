@@ -213,6 +213,80 @@ export async function optionalAuth(req: AuthenticatedRequest, res: Response, nex
   next();
 }
 
+import { companyMemberRepository } from "../repositories/CompanyMemberRepository.js";
+
+/**
+ * Canonical platform permission types
+ */
+export type Permission =
+  | "jobs:read"
+  | "jobs:create"
+  | "jobs:update"
+  | "jobs:delete"
+  | "applications:apply"
+  | "applications:view_own"
+  | "applications:view_company"
+  | "applications:update_status"
+  | "applications:delete"
+  | "resumes:manage_own"
+  | "resumes:view_applicant"
+  | "saved_jobs:manage"
+  | "job_alerts:manage"
+  | "company:manage"
+  | "company:verify"
+  | "admin:manage_users"
+  | "admin:audit_logs"
+  | "admin:database";
+
+const ROLE_PERMISSIONS: Record<string, Permission[]> = {
+  admin: [
+    "jobs:read",
+    "jobs:create",
+    "jobs:update",
+    "jobs:delete",
+    "applications:apply",
+    "applications:view_own",
+    "applications:view_company",
+    "applications:update_status",
+    "applications:delete",
+    "resumes:manage_own",
+    "resumes:view_applicant",
+    "saved_jobs:manage",
+    "job_alerts:manage",
+    "company:manage",
+    "company:verify",
+    "admin:manage_users",
+    "admin:audit_logs",
+    "admin:database",
+  ],
+  employer: [
+    "jobs:read",
+    "jobs:create",
+    "jobs:update",
+    "jobs:delete",
+    "applications:view_company",
+    "applications:update_status",
+    "resumes:view_applicant",
+    "company:manage",
+  ],
+  candidate: [
+    "jobs:read",
+    "applications:apply",
+    "applications:view_own",
+    "applications:delete",
+    "resumes:manage_own",
+    "saved_jobs:manage",
+    "job_alerts:manage",
+  ],
+};
+
+export function hasPermission(role: string, permission: Permission): boolean {
+  const normRole = (role || "").toLowerCase();
+  if (normRole === "admin") return true;
+  const permissions = ROLE_PERMISSIONS[normRole] || [];
+  return permissions.includes(permission);
+}
+
 /**
  * Role-Based Access Control middleware
  */
@@ -241,6 +315,109 @@ export function requireRole(allowedRoles: string[]) {
 }
 
 /**
+ * Admin-only authorization shortcut
+ */
+export const requireAdmin = requireRole(["Admin"]);
+
+/**
+ * Resource ownership authorization middleware
+ */
+export function requireResourceOwner(paramName = "id", idExtractor?: (req: AuthenticatedRequest) => string) {
+  return (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
+    if (!req.user) {
+      return res.status(401).json({
+        success: false,
+        code: "UNAUTHORIZED",
+        error: "Authentication required.",
+      });
+    }
+
+    const targetId = idExtractor ? idExtractor(req) : req.params[paramName];
+    const callerId = req.user.userId;
+    const callerRole = (req.user.role || "").toLowerCase();
+
+    if (callerId !== targetId && callerRole !== "admin") {
+      return res.status(403).json({
+        success: false,
+        code: "FORBIDDEN",
+        error: "Access denied. You can only manage your own personal resources.",
+      });
+    }
+
+    next();
+  };
+}
+
+/**
+ * Company membership authorization middleware
+ */
+export function requireCompanyMembership(companyIdExtractor?: (req: AuthenticatedRequest) => string) {
+  return async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
+    if (!req.user) {
+      return res.status(401).json({
+        success: false,
+        code: "UNAUTHORIZED",
+        error: "Authentication required.",
+      });
+    }
+
+    const callerRole = (req.user.role || "").toLowerCase();
+    if (callerRole === "admin") {
+      return next();
+    }
+
+    const companyId = companyIdExtractor
+      ? companyIdExtractor(req)
+      : req.params.companyId || req.body.companyId || req.query.companyId;
+
+    if (!companyId) {
+      return res.status(400).json({
+        success: false,
+        code: "MISSING_COMPANY_ID",
+        error: "Company ID is required to verify authorization.",
+      });
+    }
+
+    const isMember = await companyMemberRepository.isUserInCompany(req.user.userId, String(companyId));
+    if (!isMember) {
+      return res.status(403).json({
+        success: false,
+        code: "FORBIDDEN",
+        error: "Access denied. You are not an authorized member of this company.",
+      });
+    }
+
+    next();
+  };
+}
+
+/**
+ * Granular capability authorization middleware
+ */
+export function requirePermission(permission: Permission) {
+  return (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
+    if (!req.user) {
+      return res.status(401).json({
+        success: false,
+        code: "UNAUTHORIZED",
+        error: "Authentication required.",
+      });
+    }
+
+    const role = req.user.role || "";
+    if (!hasPermission(role, permission)) {
+      return res.status(403).json({
+        success: false,
+        code: "FORBIDDEN",
+        error: `Access denied. Insufficient permissions for ${permission}.`,
+      });
+    }
+
+    next();
+  };
+}
+
+/**
  * CSRF Protection Middleware: Protects cookie-authenticated state-changing requests
  */
 export function verifyCsrf(req: AuthenticatedRequest, res: Response, next: NextFunction) {
@@ -259,22 +436,33 @@ export function verifyCsrf(req: AuthenticatedRequest, res: Response, next: NextF
   // If request has cookie authentication, verify Origin / Referer or double-submit CSRF token
   const cookieToken = req.cookies?.[config.auth.cookieName];
   if (cookieToken) {
+    const isLogout = req.path.endsWith("/logout");
+    if (isLogout) {
+      return next();
+    }
+
     const origin = req.headers.origin || "";
     const referer = req.headers.referer || "";
     const host = req.headers.host || "";
     const secFetchSite = req.headers["sec-fetch-site"];
 
+    const csrfHeader = req.headers["x-csrf-token"];
+    const csrfCookie = req.cookies?.["moas_csrf_token"];
+    const isCsrfTokenValid = Boolean(csrfHeader && csrfCookie && csrfHeader === csrfCookie);
+
+    // If double-submit CSRF token matches, request is authorized
+    if (isCsrfTokenValid) {
+      return next();
+    }
+
     // Modern browsers send Sec-Fetch-Site: 'same-origin', 'same-site', 'cross-site', or 'none'
     if (secFetchSite === "cross-site") {
-      const csrfHeader = req.headers["x-csrf-token"];
-      const csrfCookie = req.cookies?.["moas_csrf_token"];
-      if (!csrfHeader || csrfHeader !== csrfCookie) {
-        return res.status(403).json({
-          success: false,
-          code: "CSRF_VALIDATION_FAILED",
-          error: "Cross-site request forgery protection rejected this request. Please refresh the page.",
-        });
-      }
+      logger.warn("[CSRF] Blocked cross-site request via Sec-Fetch-Site:", { path: req.path });
+      return res.status(403).json({
+        success: false,
+        code: "CSRF_VALIDATION_FAILED",
+        error: "Cross-site request forgery protection rejected this request. Please refresh the page.",
+      });
     }
 
     // If Origin or Referer is present, verify it matches host or local environment
@@ -286,11 +474,7 @@ export function verifyCsrf(req: AuthenticatedRequest, res: Response, next: NextF
         referer.includes("127.0.0.1");
       const isMatchingHost = (origin && origin.includes(host)) || (referer && referer.includes(host));
 
-      const csrfHeader = req.headers["x-csrf-token"];
-      const csrfCookie = req.cookies?.["moas_csrf_token"];
-      const isCsrfTokenValid = csrfHeader && csrfCookie && csrfHeader === csrfCookie;
-
-      if (!isLocal && !isMatchingHost && !isCsrfTokenValid) {
+      if (!isLocal && !isMatchingHost) {
         logger.warn("[CSRF] Blocked cross-origin state-changing request:", {
           method: req.method,
           path: req.path,
@@ -304,6 +488,18 @@ export function verifyCsrf(req: AuthenticatedRequest, res: Response, next: NextF
           error: "Cross-site request forgery protection rejected this request. Please refresh the page.",
         });
       }
+    } else {
+      // If neither Origin nor Referer is present on a cookie-authenticated state-changing request,
+      // and no valid CSRF token was supplied, reject to prevent blind CSRF via stripped referrers
+      logger.warn("[CSRF] Blocked cookie request lacking Origin, Referer, and CSRF token:", {
+        method: req.method,
+        path: req.path,
+      });
+      return res.status(403).json({
+        success: false,
+        code: "CSRF_VALIDATION_FAILED",
+        error: "Cross-site request forgery protection rejected this request. Missing request origin verification.",
+      });
     }
   }
 

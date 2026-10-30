@@ -7,6 +7,7 @@ const router = Router();
 
 router.get("/", (req, res) => jobController.getAllJobs(req, res));
 router.get("/:id", (req, res) => jobController.getJobById(req, res));
+
 router.post(
   "/",
   requireAuth,
@@ -14,6 +15,21 @@ router.post(
   validateBody(["title", "company", "description"]),
   (req, res) => jobController.createJob(req, res)
 );
+
+router.put(
+  "/:id",
+  requireAuth,
+  requireRole(["Employer", "employer", "Admin"]),
+  (req, res) => jobController.updateJob(req, res)
+);
+
+router.patch(
+  "/:id",
+  requireAuth,
+  requireRole(["Employer", "employer", "Admin"]),
+  (req, res) => jobController.updateJob(req, res)
+);
+
 router.delete(
   "/:id",
   requireAuth,

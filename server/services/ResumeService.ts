@@ -1,10 +1,42 @@
 import { userRepository } from "../repositories/UserRepository.js";
+import { applicationRepository } from "../repositories/ApplicationRepository.js";
 import { ResumeItem, SanitizedUser } from "../models/types.js";
 import { sanitizeUser } from "../utils/crypto.js";
 
 export class ResumeService {
   async getResumesForUser(userId: string): Promise<ResumeItem[]> {
     return await userRepository.getResumes(userId);
+  }
+
+  async getResumeById(
+    resumeId: string,
+    caller: { userId: string; role: string }
+  ): Promise<ResumeItem | null> {
+    const resume = await userRepository.getResumeById(resumeId);
+    if (!resume) return null;
+
+    const callerRole = (caller.role || "").toLowerCase();
+    if (callerRole === "admin") return resume;
+
+    if (callerRole === "candidate" || callerRole === "jobseeker") {
+      if (resume.userId !== caller.userId) {
+        throw new Error("Forbidden: Access denied. You can only view your own resumes.");
+      }
+      return resume;
+    }
+
+    if (callerRole === "employer") {
+      const hasApplied = await applicationRepository.isCandidateApplicantForEmployer(
+        resume.userId || "",
+        caller.userId
+      );
+      if (!hasApplied) {
+        throw new Error("Forbidden: Access denied. You can only view resumes of candidates who have applied to your company's jobs.");
+      }
+      return resume;
+    }
+
+    throw new Error("Forbidden: Unauthorized access.");
   }
 
   async uploadResume(
@@ -14,11 +46,15 @@ export class ResumeService {
     callerSession: { userId: string; email: string; role: string }
   ): Promise<{ resumes: ResumeItem[]; user: SanitizedUser }> {
     const callerId = callerSession.userId.toLowerCase();
-    const callerEmail = callerSession.email.toLowerCase();
-    const reqUserId = (targetUserId || "").toLowerCase();
-    const reqUserEmail = (targetEmail || "").toLowerCase();
+    const callerEmail = (callerSession.email || "").toLowerCase();
+    const resolvedTargetId = targetUserId || callerSession.userId;
+    const resolvedTargetEmail = targetEmail || callerSession.email || "";
 
-    if (callerId !== reqUserId && callerEmail !== reqUserEmail && callerSession.role.toLowerCase() !== "admin") {
+    if (
+      callerId !== resolvedTargetId.toLowerCase() &&
+      callerEmail !== resolvedTargetEmail.toLowerCase() &&
+      callerSession.role.toLowerCase() !== "admin"
+    ) {
       throw new Error("Access denied. You can only upload resumes to your own account.");
     }
 
@@ -26,7 +62,7 @@ export class ResumeService {
       throw new Error("Resume object with name is required");
     }
 
-    let user = await userRepository.getByIdOrEmail(targetUserId || callerSession.userId);
+    let user = await userRepository.getByIdOrEmail(resolvedTargetId);
     if (!user) {
       user = await userRepository.getByIdOrEmail(callerSession.userId);
     }

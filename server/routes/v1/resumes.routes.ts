@@ -9,4 +9,8 @@ router.post("/upload", requireAuth, validateBody(["resume"]), (req, res) =>
   resumeController.uploadResume(req, res)
 );
 
+router.get("/:id", requireAuth, (req, res) =>
+  resumeController.getResumeById(req, res)
+);
+
 export default router;

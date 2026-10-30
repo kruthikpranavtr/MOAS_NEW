@@ -66,6 +66,12 @@ export class JobAlertRepository implements IJobAlertRepository {
     return mapRowToAlert(res.rows[0]);
   }
 
+  async getById(id: string): Promise<JobAlertRecord | null> {
+    const res = await query("SELECT * FROM job_alerts WHERE id = $1 LIMIT 1;", [id]);
+    if (res.rows.length === 0) return null;
+    return mapRowToAlert(res.rows[0]);
+  }
+
   async delete(id: string): Promise<boolean> {
     const res = await query("DELETE FROM job_alerts WHERE id = $1;", [id]);
     return (res.rowCount ?? 0) > 0;

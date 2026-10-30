@@ -86,11 +86,16 @@ export const Navbar: React.FC<NavbarProps> = ({
     }
   };
 
+  const isEmployerOrAdmin =
+    user?.role?.toLowerCase() === "employer" || user?.role?.toLowerCase() === "admin";
+
   const navItems: { label: string; state: NavigationState; key: string }[] = [
     { label: "Home", state: "home", key: "nav.home" },
     { label: "Find Jobs", state: "find-jobs", key: "nav.findJobs" },
     { label: "Top Companies", state: "top-companies", key: "nav.topCompanies" },
-    { label: "Post a Job", state: "post-job", key: "nav.postJob" },
+    ...(isEmployerOrAdmin
+      ? [{ label: "Post a Job", state: "post-job" as NavigationState, key: "nav.postJob" }]
+      : [{ label: "My Applications", state: "my-applications" as NavigationState, key: "nav.myApplications" }]),
   ];
 
   const filteredLanguages = supportedLanguages.filter(

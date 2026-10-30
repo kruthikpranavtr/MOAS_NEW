@@ -1,4 +1,4 @@
-import { Request, Response } from "express";
+import { Response } from "express";
 import { jobAlertService } from "../services/JobAlertService.js";
 import { AuthenticatedRequest } from "../middleware/auth.js";
 import { sendSuccess, sendError } from "../utils/response.js";
@@ -7,8 +7,21 @@ import { logger } from "../utils/logger.js";
 export class JobAlertController {
   async getAlerts(req: AuthenticatedRequest, res: Response) {
     try {
-      const userId = req.user?.userId || (req.query.userId as string) || "anonymous";
-      const alerts = await jobAlertService.getAlerts(userId);
+      if (!req.user) {
+        return sendError(res, "Authentication required to view job alerts.", 401);
+      }
+
+      const callerId = req.user.userId;
+      const callerRole = (req.user.role || "").toLowerCase();
+      const requestedUserId = req.query.userId as string | undefined;
+
+      // Cross-user isolation: Candidate cannot view another user's alerts
+      if (requestedUserId && requestedUserId !== callerId && callerRole !== "admin") {
+        return sendError(res, "Forbidden: You can only view your own job alerts.", 403);
+      }
+
+      const targetUserId = callerRole === "admin" && requestedUserId ? requestedUserId : callerId;
+      const alerts = await jobAlertService.getAlerts(targetUserId);
       return sendSuccess(res, { count: alerts.length, alerts });
     } catch (error: any) {
       logger.error("[JobAlert] getAlerts error:", error);
@@ -18,10 +31,14 @@ export class JobAlertController {
 
   async createAlert(req: AuthenticatedRequest, res: Response) {
     try {
-      const userId = req.user?.userId || req.body.userId || "anonymous";
+      if (!req.user) {
+        return sendError(res, "Authentication required to create job alerts.", 401);
+      }
+
+      const callerId = req.user.userId;
       const created = await jobAlertService.createAlert({
         ...req.body,
-        userId,
+        userId: callerId, // Verified from authenticated session
       });
       return sendSuccess(res, { alert: created, message: "Alert created successfully." }, 201);
     } catch (error: any) {
@@ -30,14 +47,28 @@ export class JobAlertController {
     }
   }
 
-  async deleteAlert(req: Request, res: Response) {
+  async deleteAlert(req: AuthenticatedRequest, res: Response) {
     try {
+      if (!req.user) {
+        return sendError(res, "Authentication required to delete job alert.", 401);
+      }
+
       const { id } = req.params;
-      const deleted = await jobAlertService.deleteAlert(id);
+      const caller = {
+        userId: req.user.userId,
+        role: req.user.role,
+      };
+
+      const deleted = await jobAlertService.deleteAlert(id, caller);
+      if (!deleted) {
+        return sendError(res, `Alert with ID "${id}" not found`, 404);
+      }
+
       return sendSuccess(res, { deleted, message: "Alert deleted successfully." });
     } catch (error: any) {
       logger.error("[JobAlert] deleteAlert error:", error);
-      return sendError(res, error.message || "Failed to delete alert", 500);
+      const statusCode = error.message.includes("Forbidden") ? 403 : 500;
+      return sendError(res, error.message || "Failed to delete alert", statusCode);
     }
   }
 }

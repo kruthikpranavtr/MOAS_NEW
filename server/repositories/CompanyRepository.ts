@@ -153,6 +153,56 @@ export class CompanyRepository implements ICompanyRepository {
       return { rating: savedRating, company: updatedCompany };
     });
   }
+
+  async getById(id: string): Promise<CompanyRecord | null> {
+    const res = await query("SELECT * FROM moas.companies WHERE id = $1 LIMIT 1;", [id]);
+    if (res.rows.length === 0) return null;
+    return mapRowToCompany(res.rows[0]);
+  }
+
+  async getByName(name: string): Promise<CompanyRecord | null> {
+    const res = await query("SELECT * FROM moas.companies WHERE LOWER(name) = LOWER($1) LIMIT 1;", [name]);
+    if (res.rows.length === 0) return null;
+    return mapRowToCompany(res.rows[0]);
+  }
+
+  async create(company: Partial<CompanyRecord> & { ownerUserId?: string }): Promise<CompanyRecord> {
+    const id = company.id || `comp-${Date.now()}`;
+    const res = await query(
+      `INSERT INTO moas.companies (
+        id, name, industry, location, rating, verified, owner_user_id
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7)
+      ON CONFLICT (name) DO UPDATE SET
+        industry = COALESCE(EXCLUDED.industry, companies.industry),
+        location = COALESCE(EXCLUDED.location, companies.location),
+        updated_at = NOW()
+      RETURNING *;`,
+      [
+        id,
+        company.name,
+        company.industry || "Technology",
+        company.location || "Remote",
+        company.rating || 4.5,
+        company.verified ?? false,
+        company.ownerUserId || null,
+      ]
+    );
+
+    return mapRowToCompany(res.rows[0]);
+  }
+
+  async verifyCompany(id: string, verified = true): Promise<CompanyRecord | null> {
+    const res = await query(
+      `UPDATE moas.companies
+       SET verified = $2, updated_at = NOW()
+       WHERE id = $1
+       RETURNING *;`,
+      [id, verified]
+    );
+
+    if (res.rows.length === 0) return null;
+    return mapRowToCompany(res.rows[0]);
+  }
 }
 
 export const companyRepository = new CompanyRepository();

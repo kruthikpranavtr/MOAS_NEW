@@ -76,6 +76,7 @@ export interface JobRecord {
   salaryMax?: number;
   isFeatured?: boolean;
   employerId?: string;
+  companyId?: string;
 }
 
 export interface ApplicationRecord {
@@ -187,4 +188,28 @@ export interface OtpRecord {
   expiresAt: number;
   attempts: number;
   createdAt: number;
+}
+
+export interface CompanyMemberRecord {
+  id: string;
+  companyId: string;
+  userId: string;
+  role: "owner" | "admin" | "recruiter" | "member";
+  isVerified: boolean;
+  createdAt?: string;
+  updatedAt?: string;
+}
+
+export interface AuditLogRecord {
+  id: string;
+  actorId?: string;
+  actorEmail?: string;
+  actorRole?: string;
+  action: string;
+  resourceType: string;
+  resourceId?: string;
+  details?: Record<string, any>;
+  ipAddress?: string;
+  outcome: "SUCCESS" | "DENIED" | "FAILURE";
+  createdAt?: string;
 }

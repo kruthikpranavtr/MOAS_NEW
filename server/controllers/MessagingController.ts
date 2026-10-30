@@ -7,6 +7,12 @@ import { logger } from "../utils/logger.js";
 export class MessagingController {
   async getConversations(req: AuthenticatedRequest, res: Response) {
     try {
+      if (req.user) {
+        const queryUserId = req.query.userId as string | undefined;
+        if (queryUserId && queryUserId !== req.user.userId && req.user.role !== "Admin") {
+          return sendError(res, "Forbidden: Cannot access conversations for another user", 403);
+        }
+      }
       const userId = req.user?.userId || (req.query.userId as string) || "";
       const conversations = await messagingService.getConversations(userId);
       return sendSuccess(res, {
@@ -21,12 +27,20 @@ export class MessagingController {
     }
   }
 
-  async getConversationById(req: Request, res: Response) {
+  async getConversationById(req: AuthenticatedRequest, res: Response) {
     try {
       const { id } = req.params;
       const conversation = await messagingService.getConversationById(id);
       if (!conversation) {
         return sendError(res, `Conversation with ID "${id}" not found`, 404);
+      }
+      if (req.user && req.user.role !== "Admin") {
+        const isParticipant =
+          conversation.userId === req.user.userId ||
+          conversation.recruiterId === req.user.userId;
+        if (!isParticipant) {
+          return sendError(res, "Forbidden: You are not a participant in this conversation", 403);
+        }
       }
       return sendSuccess(res, { conversation });
     } catch (error: any) {
