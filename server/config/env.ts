@@ -19,6 +19,12 @@ export interface EnvironmentConfig {
   twilioAuthToken?: string;
   twilioPhoneNumber?: string;
   cookieSecure: boolean;
+  databaseUrl: string;
+  dbPoolMin: number;
+  dbPoolMax: number;
+  dbConnectionTimeoutMs: number;
+  dbIdleTimeoutMs: number;
+  dbSsl: boolean;
 }
 
 export function validateEnvironment(): EnvironmentConfig {
@@ -45,6 +51,20 @@ export function validateEnvironment(): EnvironmentConfig {
   // Cookie secure flag (true only in production when served over HTTPS or behind proxy)
   const cookieSecure = isProduction && process.env.COOKIE_SECURE === "true";
 
+  // PostgreSQL Configuration
+  const defaultDevDbUrl = "postgresql://mindaura:mindaura_dev_pw@127.0.0.1:5432/mindaura?options=-c%20search_path%3Dmoas,public";
+  const defaultTestDbUrl = "postgresql://mindaura:mindaura_dev_pw@127.0.0.1:5432/mindaura_test?options=-c%20search_path%3Dmoas,public";
+
+  const databaseUrl = isTest
+    ? (process.env.DATABASE_TEST_URL || process.env.DATABASE_URL || defaultTestDbUrl)
+    : (process.env.DATABASE_URL || defaultDevDbUrl);
+
+  const dbPoolMin = parseInt(process.env.DB_POOL_MIN || "2", 10);
+  const dbPoolMax = parseInt(process.env.DB_POOL_MAX || "10", 10);
+  const dbConnectionTimeoutMs = parseInt(process.env.DB_CONNECTION_TIMEOUT_MS || "5000", 10);
+  const dbIdleTimeoutMs = parseInt(process.env.DB_IDLE_TIMEOUT_MS || "10000", 10);
+  const dbSsl = process.env.DATABASE_SSL === "true";
+
   return {
     port,
     nodeEnv,
@@ -62,6 +82,12 @@ export function validateEnvironment(): EnvironmentConfig {
     twilioAuthToken,
     twilioPhoneNumber,
     cookieSecure,
+    databaseUrl,
+    dbPoolMin,
+    dbPoolMax,
+    dbConnectionTimeoutMs,
+    dbIdleTimeoutMs,
+    dbSsl,
   };
 }
 

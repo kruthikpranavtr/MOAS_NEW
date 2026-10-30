@@ -22,6 +22,14 @@ export const config = {
       path: "/",
     },
   },
+  database: {
+    url: env.databaseUrl,
+    poolMin: env.dbPoolMin,
+    poolMax: env.dbPoolMax,
+    connectionTimeoutMs: env.dbConnectionTimeoutMs,
+    idleTimeoutMs: env.dbIdleTimeoutMs,
+    ssl: env.dbSsl,
+  },
   rateLimit: {
     authWindowMs: 15 * 60 * 1000, // 15 minutes
     authMax: 50, // 50 attempts per 15 min window

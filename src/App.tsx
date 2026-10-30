@@ -73,159 +73,28 @@ export default function App() {
   // Authentication Guard: strictly protects the application
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [currentNav, setCurrentNav] = useState<NavigationState>("login");
-  const [registeredUsers, setRegisteredUsers] = useState<RegisteredUser[]>(() => {
-    const saved = localStorage.getItem("moas_registered_users");
-    if (saved) {
-      try {
-        const parsed = JSON.parse(saved);
-        if (Array.isArray(parsed)) {
-          // Filter out legacy hardcoded test accounts
-          const testUsernames = new Set(["arunkumar", "techcorp_hr"]);
-          const testIds = new Set(["MOAS-ID-84920", "MOAS-ID-10482", "MOAS-ID-10824", "MOAS-ID-30941", "MOAS-ID-55019"]);
-          return parsed.filter(
-            (u: RegisteredUser) =>
-              !testUsernames.has(u.username?.toLowerCase() || "") &&
-              !testIds.has(u.id) &&
-              u.email !== "arun.kumar@email.com" &&
-              u.email !== "talent@techcorp.io" &&
-              u.email !== "sarah.jenkins@techcorp.io"
-          );
-        }
-      } catch (e) {
-        console.error(e);
-      }
-    }
-    return [];
-  });
+  const [registeredUsers, setRegisteredUsers] = useState<RegisteredUser[]>([]);
   const [pendingUser, setPendingUser] = useState<RegisteredUser | null>(null);
   const [registrationNotice, setRegistrationNotice] = useState<string | undefined>(undefined);
   const [authEmail, setAuthEmail] = useState("");
   const [authPhone, setAuthPhone] = useState("");
 
-  useEffect(() => {
-    localStorage.setItem("moas_registered_users", JSON.stringify(registeredUsers));
-  }, [registeredUsers]);
-
-  // App Data State
-  const [jobs, setJobs] = useState<Job[]>(() => {
-    const saved = localStorage.getItem("moas_jobs");
-    if (saved) {
-      try {
-        const parsed = JSON.parse(saved);
-        if (Array.isArray(parsed) && parsed.length > 0) {
-          const existingIds = new Set(parsed.map((j: Job) => j.id));
-          const missingInitial = initialJobs.filter((j) => !existingIds.has(j.id));
-          if (missingInitial.length > 0) {
-            return [...parsed, ...missingInitial];
-          }
-          return parsed;
-        }
-      } catch (e) {
-        console.error(e);
-      }
-    }
-    return initialJobs;
-  });
-
-  const [applications, setApplications] = useState<Application[]>(() => {
-    const saved = localStorage.getItem("moas_applications");
-    if (saved) {
-      try {
-        const parsed = JSON.parse(saved);
-        if (Array.isArray(parsed)) return parsed;
-      } catch (e) {
-        console.error(e);
-      }
-    }
-    return initialApplications;
-  });
-
-  const [alerts, setAlerts] = useState<JobAlert[]>(() => {
-    const saved = localStorage.getItem("moas_alerts");
-    if (saved) {
-      try {
-        const parsed = JSON.parse(saved);
-        if (Array.isArray(parsed)) return parsed;
-      } catch (e) {
-        console.error(e);
-      }
-    }
-    return initialJobAlerts;
-  });
-
-  const [profileViews, setProfileViews] = useState<number>(() => {
-    const saved = localStorage.getItem("moas_profile_views");
-    if (saved) {
-      const num = parseInt(saved, 10);
-      if (!isNaN(num)) return num;
-    }
-    return 0;
-  });
+  // App Data State (Authoritative source is PostgreSQL backend APIs)
+  const [jobs, setJobs] = useState<Job[]>(initialJobs);
+  const [applications, setApplications] = useState<Application[]>(initialApplications);
+  const [alerts, setAlerts] = useState<JobAlert[]>(initialJobAlerts);
+  const [profileViews, setProfileViews] = useState<number>(0);
   const [profileViewEvents, setProfileViewEvents] = useState<ProfileViewEvent[]>([]);
   const [isLiveViewsModalOpen, setIsLiveViewsModalOpen] = useState(false);
 
   const [conversations, setConversations] = useState<Conversation[]>(initialConversations);
   const [notifications, setNotifications] = useState<AppNotification[]>([]);
-  const [companies, setCompanies] = useState<Company[]>(() => {
-    const saved = localStorage.getItem("moas_companies");
-    if (saved) {
-      try {
-        const parsed = JSON.parse(saved);
-        if (Array.isArray(parsed) && parsed.length > 0) return parsed;
-      } catch (e) {
-        console.error(e);
-      }
-    }
-    return initialCompanies;
-  });
+  const [companies, setCompanies] = useState<Company[]>(initialCompanies);
   const [companyRatings, setCompanyRatings] = useState<CompanyRating[]>([]);
   const [isRateModalOpen, setIsRateModalOpen] = useState(false);
   const [targetRatingCompany, setTargetRatingCompany] = useState("");
 
-  const [user, setUser] = useState<UserProfile>(() => {
-    const saved = localStorage.getItem("moas_user_profile");
-    if (saved) {
-      try {
-        const parsed = JSON.parse(saved);
-        if (
-          parsed &&
-          parsed.email !== "arun.kumar@email.com" &&
-          parsed.id !== "MOAS-ID-84920" &&
-          parsed.username !== "arunkumar" &&
-          parsed.name !== "Arun Kumar"
-        ) {
-          return parsed;
-        }
-      } catch (e) {
-        console.error(e);
-      }
-    }
-    return initialProfile;
-  });
-
-  useEffect(() => {
-    localStorage.setItem("moas_jobs", JSON.stringify(jobs));
-  }, [jobs]);
-
-  useEffect(() => {
-    localStorage.setItem("moas_applications", JSON.stringify(applications));
-  }, [applications]);
-
-  useEffect(() => {
-    localStorage.setItem("moas_alerts", JSON.stringify(alerts));
-  }, [alerts]);
-
-  useEffect(() => {
-    localStorage.setItem("moas_profile_views", profileViews.toString());
-  }, [profileViews]);
-
-  useEffect(() => {
-    localStorage.setItem("moas_user_profile", JSON.stringify(user));
-  }, [user]);
-
-  useEffect(() => {
-    localStorage.setItem("moas_companies", JSON.stringify(companies));
-  }, [companies]);
+  const [user, setUser] = useState<UserProfile>(initialProfile);
 
   // Resilient JSON fetch helper with retry for cold-start resilience
   const safeFetchJson = async <T,>(url: string, retries = 2, delayMs = 600): Promise<T | null> => {
@@ -720,7 +589,6 @@ export default function App() {
               (u.username ? u.username.toLowerCase() !== pendingUser.username?.toLowerCase() : true)
           ),
         ];
-        localStorage.setItem("moas_registered_users", JSON.stringify(updated));
         return updated;
       });
 
@@ -1167,18 +1035,11 @@ export default function App() {
     }).catch((e) => console.warn("[MOAS Create Alert Sync]", e?.message || e));
   };
 
-  // Comprehensive profile persistence: updates React state, local storage, and Cloud Firestore
+  // Comprehensive profile persistence: updates React state and PostgreSQL backend
   const handleUpdateUser = async (updated: UserProfile) => {
     setUser(updated);
 
-    // 1. Persist to local storage
-    try {
-      localStorage.setItem("moas_user_profile", JSON.stringify(updated));
-    } catch (e) {
-      console.warn("Local storage write warning:", e);
-    }
-
-    // 2. Synchronize registeredUsers list in state and local storage
+    // 1. Synchronize registeredUsers list in state
     setRegisteredUsers((prev) => {
       const idx = prev.findIndex(
         (u) =>
@@ -1228,11 +1089,6 @@ export default function App() {
           },
           ...prev,
         ];
-      }
-      try {
-        localStorage.setItem("moas_registered_users", JSON.stringify(nextList));
-      } catch (e) {
-        console.warn(e);
       }
       return nextList;
     });

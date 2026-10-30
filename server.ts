@@ -10,6 +10,9 @@ import { ResumeItem, UserRecord } from "./server/models/types.js";
 export type ServerResumeItem = ResumeItem;
 export type ServerUserRecord = UserRecord;
 
+import { initDatabase, closePool } from "./server/db/postgresClient.js";
+import { migrator } from "./server/db/migrator.js";
+
 const app = createApp();
 const PORT = config.app.port;
 
@@ -17,6 +20,10 @@ let server: http.Server | null = null;
 
 // Setup Vite middleware in dev or static files in prod
 export async function setupVite() {
+  // Initialize PostgreSQL database connection and run schema migrations
+  await initDatabase();
+  await migrator.runMigrations();
+
   if (!config.app.isProduction) {
     const { createServer: createViteServer } = await import("vite");
     const vite = await createViteServer({
@@ -43,8 +50,9 @@ export async function setupVite() {
 }
 
 // Graceful server shutdown on termination signals
-function handleShutdown(signal: string) {
+async function handleShutdown(signal: string) {
   logger.info(`Received ${signal}. Initiating graceful shutdown...`);
+  await closePool();
   if (server) {
     server.close(() => {
       logger.info("HTTP server closed. Exiting process.");

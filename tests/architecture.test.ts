@@ -4,9 +4,15 @@ import request from "supertest";
 
 process.env.NODE_ENV = "test";
 
+import { initDatabase, closePool } from "../server/db/postgresClient.js";
+import { migrator } from "../server/db/migrator.js";
+
 const { app } = await import("../server.js");
 
 test("MOAS Phase 3 Backend Architecture Rebuild Test Suite", async (t) => {
+  await initDatabase();
+  await migrator.runMigrations();
+
   let sessionToken = "";
   let sessionCookie = "";
   let testUserId = `arch-user-${Date.now()}`;
@@ -80,7 +86,8 @@ test("MOAS Phase 3 Backend Architecture Rebuild Test Suite", async (t) => {
     sessionToken = loginRes.body.token;
 
     // Verify Set-Cookie header contains moas_session_token
-    const cookies = loginRes.headers["set-cookie"];
+    const rawCookies = loginRes.headers["set-cookie"];
+    const cookies: string[] = Array.isArray(rawCookies) ? rawCookies : rawCookies ? [rawCookies] : [];
     assert.ok(cookies && cookies.length > 0, "Expected set-cookie header on login");
     const sessionCookieStr = cookies.find((c: string) => c.includes("moas_session_token"));
     assert.ok(sessionCookieStr, "Expected moas_session_token in cookies");
@@ -99,8 +106,9 @@ test("MOAS Phase 3 Backend Architecture Rebuild Test Suite", async (t) => {
       .post("/api/v1/auth/logout")
       .set("Cookie", [sessionCookie]);
     assert.equal(logoutRes.status, 200);
-    const logoutCookies = logoutRes.headers["set-cookie"];
-    assert.ok(logoutCookies, "Expected set-cookie header on logout");
+    const rawLogoutCookies = logoutRes.headers["set-cookie"];
+    const logoutCookies: string[] = Array.isArray(rawLogoutCookies) ? rawLogoutCookies : rawLogoutCookies ? [rawLogoutCookies] : [];
+    assert.ok(logoutCookies.length > 0, "Expected set-cookie header on logout");
     assert.ok(logoutCookies.some((c: string) => c.includes("moas_session_token=;")));
   });
 
@@ -141,6 +149,6 @@ test("MOAS Phase 3 Backend Architecture Rebuild Test Suite", async (t) => {
   });
 });
 
-test.after(() => {
-  setTimeout(() => process.exit(0), 100).unref();
+test.after(async () => {
+  await closePool();
 });

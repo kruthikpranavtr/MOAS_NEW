@@ -5,10 +5,16 @@ import request from "supertest";
 // Set test environment so server does not auto-bind PORT or launch Vite dev server
 process.env.NODE_ENV = "test";
 
+import { initDatabase, closePool } from "../server/db/postgresClient.js";
+import { migrator } from "../server/db/migrator.js";
+
 // Import initialized Express app
 const { app } = await import("../server.js");
 
 test("MOAS Security & Production Runtime Test Suite", async (t) => {
+  await initDatabase();
+  await migrator.runMigrations();
+
   // Test tokens and test user state
   let candidateToken: string = "";
   let candidateId: string = "";
@@ -302,6 +308,6 @@ test("MOAS Security & Production Runtime Test Suite", async (t) => {
   });
 });
 
-test.after(() => {
-  setTimeout(() => process.exit(0), 100).unref();
+test.after(async () => {
+  await closePool();
 });

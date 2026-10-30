@@ -1222,6 +1222,14 @@ export async function deleteJobAlert(id: string): Promise<boolean> {
   return true;
 }
 
+export function getAllSavedJobs(): DBSavedJob[] {
+  return Array.from(memoryStore.savedJobs.values());
+}
+
+export function getAllJobAlerts(): DBJobAlert[] {
+  return Array.from(memoryStore.alerts.values());
+}
+
 // ----------------------------------------------------
 // COMPANY RATINGS & TOP COMPANIES SERVICE METHODS
 // ----------------------------------------------------

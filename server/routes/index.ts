@@ -4,15 +4,27 @@ import legacyRouter from "./legacy.routes.js";
 import { getAIClient } from "../integrations/gemini.js";
 import { config } from "../config/index.js";
 
+import { checkDbHealth } from "../db/postgresClient.js";
+
 const rootApiRouter = Router();
 
 // Health check endpoint
-rootApiRouter.get("/health", (req, res) => {
+rootApiRouter.get("/health", async (req, res) => {
   const ai = getAIClient();
-  res.json({
-    status: "ok",
+  const dbHealth = await checkDbHealth();
+  const isHealthy = dbHealth.status === "connected";
+  res.status(isHealthy ? 200 : 503).json({
+    status: isHealthy ? "ok" : "degraded",
     service: "MOAS Platform API",
     version: "v1",
+    database: {
+      status: dbHealth.status,
+      engine: "PostgreSQL 16",
+      database: dbHealth.database,
+      latencyMs: dbHealth.latencyMs,
+      pool: dbHealth.pool,
+      error: dbHealth.error,
+    },
     geminiConfigured: !!ai,
     environment: config.app.env,
     timestamp: new Date().toISOString(),
