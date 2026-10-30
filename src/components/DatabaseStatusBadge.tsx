@@ -82,8 +82,11 @@ export const DatabaseStatusBadge: React.FC<DatabaseStatusBadgeProps> = ({ onData
 
   const handleReseed = async () => {
     try {
-      setIsLoading(true);
-      const res = await fetch("/api/db/seed", { method: "POST" });
+      const token = localStorage.getItem("moas_auth_token");
+      const res = await fetch("/api/db/seed", {
+        method: "POST",
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
+      });
       if (res.ok) {
         const data = await res.json();
         if (data.success) {

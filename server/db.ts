@@ -1074,7 +1074,10 @@ export async function saveUser(user: DBUser): Promise<DBUser> {
   memoryStore.users.set(updatedUser.id, updatedUser);
   if (firestoreDb) {
     try {
-      await setDoc(doc(firestoreDb, "users", updatedUser.id), updatedUser, { merge: true });
+      const firestoreData = Object.fromEntries(
+        Object.entries(updatedUser).filter(([_, v]) => v !== undefined)
+      );
+      await setDoc(doc(firestoreDb, "users", updatedUser.id), firestoreData, { merge: true });
       console.log(`[Firestore] User ${updatedUser.id} (${updatedUser.name}) permanently saved to storage.`);
     } catch (e) {
       console.error("Firestore saveUser error:", e);

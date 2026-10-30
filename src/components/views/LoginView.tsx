@@ -41,7 +41,7 @@ export const LoginView: React.FC<LoginViewProps> = ({
     message: string;
   } | null>(null);
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     const cleanIdentifier = identifier.trim().toLowerCase();
     const cleanPassword = password.trim();
@@ -64,58 +64,60 @@ export const LoginView: React.FC<LoginViewProps> = ({
 
     setIsLoading(true);
 
-    // 1. Search in registered accounts by User ID (e.g. MOAS-ID-84920), username, email, or full name
-    const existing = registeredUsers.find((u) => {
-      const idMatch = u.id?.toLowerCase() === cleanIdentifier;
-      const usernameMatch = u.username && u.username.toLowerCase() === cleanIdentifier;
-      const emailMatch = u.email?.toLowerCase() === cleanIdentifier;
-      const nameMatch = u.name?.toLowerCase() === cleanIdentifier;
-      return idMatch || usernameMatch || emailMatch || nameMatch;
-    });
-
-    if (existing) {
-      // 2. Validate Password
-      const expectedPassword = existing.password;
-
-      if (!expectedPassword || cleanPassword !== expectedPassword) {
-        // Password Incorrect
-        setTimeout(() => {
-          setIsLoading(false);
-          setRoutingStatus({
-            type: "wrongPassword",
-            message: "Incorrect password. Please verify your password and try again.",
-          });
-        }, 350);
-        return;
-      }
-
-      // Password Correct -> Direct Login with Role routing notification
-      const isEmployer =
-        existing.role?.toLowerCase() === "employer";
-      const targetDashboardName = isEmployer
-        ? "Employer Dashboard"
-        : "Job Seeker Dashboard";
-
-      setRoutingStatus({
-        type: "success",
-        message: `Credentials verified! Role: ${
-          isEmployer ? "Employer / Hiring Organization" : "Job Seeker / Candidate"
-        }. Welcome back, ${existing.name}. Redirecting to ${targetDashboardName}...`,
+    try {
+      // Authenticate securely via backend API
+      const res = await fetch("/api/auth/login", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          identifier: cleanIdentifier,
+          password: cleanPassword,
+        }),
       });
 
-      setTimeout(() => {
-        setIsLoading(false);
-        onDirectLoginSuccess(existing);
-      }, 500);
-    } else {
-      // 3. User Not Found
-      setTimeout(() => {
-        setIsLoading(false);
+      const data = await res.json();
+
+      if (res.ok && data.success && data.user) {
+        if (data.token) {
+          localStorage.setItem("moas_auth_token", data.token);
+        }
+
+        const isEmployer = data.user.role?.toLowerCase() === "employer";
+        const targetDashboardName = isEmployer
+          ? "Employer Dashboard"
+          : "Job Seeker Dashboard";
+
         setRoutingStatus({
-          type: "notFound",
-          message: `No account found for "${identifier.trim()}". Please check your credentials or create a new account.`,
+          type: "success",
+          message: `Credentials verified! Role: ${
+            isEmployer ? "Employer / Hiring Organization" : "Job Seeker / Candidate"
+          }. Welcome back, ${data.user.name}. Redirecting to ${targetDashboardName}...`,
         });
-      }, 400);
+
+        setTimeout(() => {
+          setIsLoading(false);
+          onDirectLoginSuccess(data.user);
+        }, 500);
+      } else {
+        setIsLoading(false);
+        if (res.status === 404 || data.code === "USER_NOT_FOUND") {
+          setRoutingStatus({
+            type: "notFound",
+            message: data.error || `No account found for "${identifier.trim()}". Please check your credentials or create a new account.`,
+          });
+        } else {
+          setRoutingStatus({
+            type: "wrongPassword",
+            message: data.error || "Incorrect password. Please verify your password and try again.",
+          });
+        }
+      }
+    } catch (err: any) {
+      setIsLoading(false);
+      setRoutingStatus({
+        type: "wrongPassword",
+        message: "Connection failed. Please ensure the MOAS server is running.",
+      });
     }
   };
 

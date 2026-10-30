@@ -40,6 +40,18 @@ import {
   DBProfileView,
 } from "./server/db.js";
 import { getPostgresStatus, queryPostgres, pgGetProfileViews } from "./server/postgres.js";
+import {
+  hashPassword,
+  verifyPassword,
+  createSession,
+  deleteSession,
+  sanitizeUser,
+  requireAuth,
+  optionalAuth,
+  requireRole,
+  extractToken,
+  AuthenticatedRequest,
+} from "./server/auth.js";
 
 dotenv.config();
 
@@ -106,45 +118,137 @@ app.get("/api/db/postgres/status", async (req, res) => {
   }
 });
 
-app.post("/api/db/postgres/query", async (req, res) => {
-  try {
-    const { sql, params } = req.body;
-    if (!sql || typeof sql !== "string") {
-      return res.status(400).json({ success: false, error: "Valid SQL string is required." });
-    }
-    const result = await queryPostgres(sql, Array.isArray(params) ? params : []);
-    res.json({
-      success: true,
-      rows: result.rows,
-      rowCount: result.rows ? result.rows.length : result.affectedRows,
-      fields: result.fields ? result.fields.map((f: any) => f.name) : [],
-    });
-  } catch (error: any) {
-    res.status(500).json({ success: false, error: error.message });
-  }
-});
-
-app.get("/api/db/postgres/tables/:table", async (req, res) => {
+// Admin-only table schema and row inspection (arbitrary POST query endpoint completely removed)
+app.get("/api/db/postgres/tables/:table", requireAuth, requireRole(["Admin"]), async (req, res) => {
   try {
     const allowed = ["jobs", "applications", "users", "companies", "profile_views", "company_ratings", "saved_jobs", "job_alerts"];
     const table = req.params.table.toLowerCase();
     if (!allowed.includes(table)) {
       return res.status(400).json({ success: false, error: `Invalid table name. Allowed: ${allowed.join(", ")}` });
     }
-    const result = await queryPostgres(`SELECT * FROM ${table} LIMIT 50`);
+    // Never expose password column even in admin database inspection
+    let sql = `SELECT * FROM ${table} LIMIT 50`;
+    if (table === "users") {
+      sql = `SELECT id, username, name, email, phone, role, company_name, company_email, industry, company_size, contact_person, company_website, avatar_url, location, quote, about_me, skills, experience_level, education, resumes, created_at, updated_at FROM users LIMIT 50`;
+    }
+    const result = await queryPostgres(sql);
     res.json({ success: true, table, count: result.rows.length, rows: result.rows });
   } catch (error: any) {
     res.status(500).json({ success: false, error: error.message });
   }
 });
 
-// 2. Database seed endpoint
-app.post("/api/db/seed", async (req, res) => {
+// 2. Database seed endpoint (Admin authenticated only)
+app.post("/api/db/seed", requireAuth, requireRole(["Admin"]), async (req, res) => {
   try {
     const result = await seedInitialData(true);
     res.json({ success: true, message: "Database re-seeded successfully", ...result });
   } catch (error: any) {
     res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// ==========================================
+// SECURE BACKEND AUTHENTICATION ENDPOINTS
+// ==========================================
+
+// POST /api/auth/login — Authenticate credentials server-side and issue session token
+app.post("/api/auth/login", async (req, res) => {
+  try {
+    const { identifier, password } = req.body;
+    if (!identifier || !password) {
+      return res.status(400).json({
+        success: false,
+        error: "User ID / email / username and password are required.",
+      });
+    }
+
+    const cleanId = String(identifier).trim().toLowerCase();
+    const cleanPassword = String(password).trim();
+
+    // 1. Find user in persistent DB or in-memory registry
+    const dbUsers = await getUsers();
+    let target = dbUsers.find(
+      (u) =>
+        u.id?.toLowerCase() === cleanId ||
+        (u.username && u.username.toLowerCase() === cleanId) ||
+        (u.email && u.email.toLowerCase() === cleanId) ||
+        (u.name && u.name.toLowerCase() === cleanId)
+    );
+
+    if (!target) {
+      target = SERVER_USERS.find(
+        (u) =>
+          u.id.toLowerCase() === cleanId ||
+          (u.username && u.username.toLowerCase() === cleanId) ||
+          u.email.toLowerCase() === cleanId ||
+          u.name.toLowerCase() === cleanId
+      ) as any;
+    }
+
+    if (!target) {
+      return res.status(404).json({
+        success: false,
+        code: "USER_NOT_FOUND",
+        error: `No account found for "${identifier}". Please check your credentials or create a new account.`,
+      });
+    }
+
+    // 2. Verify password securely using constant-time comparison
+    const isValid = verifyPassword(cleanPassword, target.password);
+    if (!isValid) {
+      return res.status(401).json({
+        success: false,
+        code: "INVALID_CREDENTIALS",
+        error: "Incorrect password. Please verify your password and try again.",
+      });
+    }
+
+    // 3. Auto-upgrade legacy plaintext password to scrypt hash
+    if (target.password && !target.password.startsWith("scrypt:")) {
+      const hashed = hashPassword(cleanPassword);
+      target.password = hashed;
+      saveUser(target).catch((e) => console.warn("[Auth Upgrade] Failed to persist upgraded hash:", e));
+      const memIdx = SERVER_USERS.findIndex((u) => u.id === target.id);
+      if (memIdx !== -1) SERVER_USERS[memIdx].password = hashed;
+    }
+
+    // 4. Create cryptographically secure session
+    const token = createSession(target);
+
+    return res.json({
+      success: true,
+      token,
+      user: sanitizeUser(target),
+      message: "Authentication successful.",
+    });
+  } catch (error: any) {
+    console.error("[Auth] Login error:", error);
+    return res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// POST /api/auth/logout — Terminate active session
+app.post("/api/auth/logout", (req, res) => {
+  const token = extractToken(req);
+  if (token) {
+    deleteSession(token);
+  }
+  return res.json({ success: true, message: "Logged out successfully." });
+});
+
+// GET /api/auth/me — Return current authenticated session profile
+app.get("/api/auth/me", requireAuth, async (req: AuthenticatedRequest, res) => {
+  try {
+    const user = await getUser(req.user!.userId);
+    if (!user) {
+      const memUser = SERVER_USERS.find((u) => u.id === req.user!.userId);
+      if (memUser) return res.json({ success: true, user: sanitizeUser(memUser) });
+      return res.status(404).json({ success: false, error: "User profile not found." });
+    }
+    return res.json({ success: true, user: sanitizeUser(user) });
+  } catch (error: any) {
+    return res.status(500).json({ success: false, error: error.message });
   }
 });
 
@@ -175,7 +279,7 @@ app.get("/api/jobs/:id", async (req, res) => {
   }
 });
 
-app.post("/api/jobs", async (req, res) => {
+app.post("/api/jobs", requireAuth, requireRole(["Employer", "employer"]), async (req: AuthenticatedRequest, res) => {
   try {
     const { title, company, location, type, experience, salary, description, requirements, department, tags } = req.body;
     if (!title || !company) {
@@ -206,7 +310,7 @@ app.post("/api/jobs", async (req, res) => {
   }
 });
 
-app.delete("/api/jobs/:id", async (req, res) => {
+app.delete("/api/jobs/:id", requireAuth, requireRole(["Employer", "employer"]), async (req: AuthenticatedRequest, res) => {
   try {
     await deleteJob(req.params.id);
     res.json({ success: true, message: `Job ${req.params.id} deleted` });
@@ -226,20 +330,25 @@ app.get("/api/applications", async (req, res) => {
   }
 });
 
-app.post("/api/applications", async (req, res) => {
+app.post("/api/applications", requireAuth, async (req: AuthenticatedRequest, res) => {
   try {
-    const { jobId, jobTitle, company, candidateId, candidateName, candidateEmail, resumeName, matchScore } = req.body;
-    if (!jobId || !candidateId) {
-      return res.status(400).json({ success: false, error: "jobId and candidateId are required" });
+    const { jobId, jobTitle, company, resumeName, matchScore } = req.body;
+    if (!jobId) {
+      return res.status(400).json({ success: false, error: "jobId is required" });
     }
+    // Authenticated user credentials enforce candidate ownership
+    const candidateId = req.user!.userId;
+    const candidateName = req.body.candidateName || req.user!.name || "Candidate";
+    const candidateEmail = req.body.candidateEmail || req.user!.email || "candidate@email.com";
+
     const newApp: DBApplication = {
       id: req.body.id || `app-${Date.now()}`,
       jobId,
       jobTitle: jobTitle || "Software Engineer",
       company: company || "Hiring Company",
       candidateId,
-      candidateName: candidateName || "Candidate",
-      candidateEmail: candidateEmail || "candidate@email.com",
+      candidateName,
+      candidateEmail,
       appliedDate: new Date().toLocaleDateString("en-US", { month: "short", day: "2-digit", year: "numeric" }),
       status: "Applied",
       stage: "Initial Screening",
@@ -253,7 +362,7 @@ app.post("/api/applications", async (req, res) => {
   }
 });
 
-app.patch("/api/applications/:id", async (req, res) => {
+app.patch("/api/applications/:id", requireAuth, requireRole(["Employer", "employer"]), async (req: AuthenticatedRequest, res) => {
   try {
     const { status, stage } = req.body;
     const updated = await updateApplicationStatus(req.params.id, status, stage);
@@ -266,8 +375,16 @@ app.patch("/api/applications/:id", async (req, res) => {
   }
 });
 
-app.delete("/api/applications/:id", async (req, res) => {
+app.delete("/api/applications/:id", requireAuth, async (req: AuthenticatedRequest, res) => {
   try {
+    const apps = await getApplications();
+    const existingApp = apps.find((a) => a.id === req.params.id);
+    if (existingApp) {
+      const userRole = (req.user!.role || "").toLowerCase();
+      if (existingApp.candidateId !== req.user!.userId && !["employer", "admin"].includes(userRole)) {
+        return res.status(403).json({ success: false, error: "Access denied. You can only manage your own applications." });
+      }
+    }
     await deleteApplication(req.params.id);
     res.json({ success: true, message: `Application ${req.params.id} removed` });
   } catch (error: any) {
@@ -374,9 +491,9 @@ app.post("/api/moas/ratings", async (req, res) => {
 });
 
 // 6. Saved Jobs Endpoints
-app.get("/api/saved-jobs", async (req, res) => {
+app.get("/api/saved-jobs", optionalAuth, async (req: AuthenticatedRequest, res) => {
   try {
-    const userId = (req.query.userId as string) || "MOAS-ID-84920";
+    const userId = req.user?.userId || (req.query.userId as string) || "MOAS-ID-84920";
     const saved = await getSavedJobs(userId);
     res.json({ success: true, savedJobs: saved });
   } catch (error: any) {
@@ -384,12 +501,13 @@ app.get("/api/saved-jobs", async (req, res) => {
   }
 });
 
-app.post("/api/saved-jobs", async (req, res) => {
+app.post("/api/saved-jobs", requireAuth, async (req: AuthenticatedRequest, res) => {
   try {
-    const { userId, jobId } = req.body;
-    if (!userId || !jobId) {
-      return res.status(400).json({ success: false, error: "userId and jobId required" });
+    const { jobId } = req.body;
+    if (!jobId) {
+      return res.status(400).json({ success: false, error: "jobId required" });
     }
+    const userId = req.user!.userId;
     const result = await toggleSavedJob(userId, jobId);
     res.json({ success: true, ...result });
   } catch (error: any) {
@@ -606,17 +724,16 @@ export interface ServerUserRecord {
 
 const SERVER_USERS: ServerUserRecord[] = [];
 
-// Get all permanent users
+// Get all permanent users (passwords and hashes completely excluded)
 app.get("/api/moas/users", async (req, res) => {
   try {
     const dbUsers = await getUsers();
     const testIds = new Set(["MOAS-ID-84920", "MOAS-ID-10824", "MOAS-ID-55019", "MOAS-ID-10482", "MOAS-ID-30941"]);
     const cleanedDbUsers = dbUsers
       .filter((u) => !testIds.has(u.id) && u.email !== "arun.kumar@email.com" && u.email !== "talent@techcorp.io")
-      .map((u) => ({
+      .map((u) => sanitizeUser({
         id: u.id,
         username: u.username || u.id.toLowerCase(),
-        password: u.password,
         name: u.name,
         email: u.email,
         phone: u.phone,
@@ -639,9 +756,11 @@ app.get("/api/moas/users", async (req, res) => {
         updatedAt: u.updatedAt,
       }));
 
-    // Merge in-memory users that might not be in DB yet
-    const existingIds = new Set(cleanedDbUsers.map((u) => u.id));
-    const memoryOnly = SERVER_USERS.filter((u) => !existingIds.has(u.id));
+    // Merge in-memory users that might not be in DB yet (strictly sanitized)
+    const existingIds = new Set(cleanedDbUsers.map((u: any) => u.id));
+    const memoryOnly = SERVER_USERS
+      .filter((u) => !existingIds.has(u.id))
+      .map(sanitizeUser);
 
     res.json({
       success: true,
@@ -650,24 +769,24 @@ app.get("/api/moas/users", async (req, res) => {
   } catch (e) {
     res.json({
       success: true,
-      users: SERVER_USERS,
+      users: SERVER_USERS.map(sanitizeUser),
     });
   }
 });
 
-// Get specific user by ID or Email
+// Get specific user by ID or Email (sanitized)
 app.get("/api/moas/users/:id", async (req, res) => {
   try {
     const { id } = req.params;
     const user = await getUser(id);
     if (user) {
-      return res.json({ success: true, user });
+      return res.json({ success: true, user: sanitizeUser(user) });
     }
     const memUser = SERVER_USERS.find(
-      (u) => u.id.toLowerCase() === id.toLowerCase() || u.email.toLowerCase() === id.toLowerCase()
+      (u) => u.id.toLowerCase() === id.toLowerCase() || (u.email && u.email.toLowerCase() === id.toLowerCase())
     );
     if (memUser) {
-      return res.json({ success: true, user: memUser });
+      return res.json({ success: true, user: sanitizeUser(memUser) });
     }
     return res.status(404).json({ success: false, error: "User not found in storage" });
   } catch (e: any) {
@@ -675,21 +794,37 @@ app.get("/api/moas/users/:id", async (req, res) => {
   }
 });
 
-// Update user profile by ID
-app.put("/api/moas/users/:id", async (req, res) => {
+// Update user profile by ID (Requires Authentication & Ownership)
+app.put("/api/moas/users/:id", requireAuth, async (req: AuthenticatedRequest, res) => {
   try {
     const { id } = req.params;
     const updates = req.body;
 
+    const callerId = req.user!.userId.toLowerCase();
+    const targetId = id.toLowerCase();
+    if (callerId !== targetId && req.user!.role.toLowerCase() !== "admin") {
+      return res.status(403).json({
+        success: false,
+        error: "Access denied. You can only modify your own profile.",
+      });
+    }
+
     let target = await getUser(id);
     const existingIdx = SERVER_USERS.findIndex(
-      (u) => u.id.toLowerCase() === id.toLowerCase() || (u.email && u.email.toLowerCase() === id.toLowerCase())
+      (u) => u.id.toLowerCase() === targetId || (u.email && u.email.toLowerCase() === targetId)
     );
+
+    // If updating password, hash securely with scrypt
+    let resolvedPassword = target?.password || (existingIdx !== -1 ? SERVER_USERS[existingIdx].password : undefined);
+    if (updates.password) {
+      const cleanPass = String(updates.password).trim();
+      resolvedPassword = cleanPass.startsWith("scrypt:") ? cleanPass : hashPassword(cleanPass);
+    }
 
     const mergedData = {
       id,
       username: updates.username || target?.username || (existingIdx !== -1 ? SERVER_USERS[existingIdx].username : id.toLowerCase()),
-      password: updates.password || target?.password || (existingIdx !== -1 ? SERVER_USERS[existingIdx].password : "User@2026!"),
+      password: resolvedPassword || hashPassword("User@2026!"),
       name: updates.name || target?.name || (existingIdx !== -1 ? SERVER_USERS[existingIdx].name : "User"),
       email: updates.email || target?.email || (existingIdx !== -1 ? SERVER_USERS[existingIdx].email : ""),
       phone: updates.phone || target?.phone || (existingIdx !== -1 ? SERVER_USERS[existingIdx].phone : ""),
@@ -719,7 +854,11 @@ app.put("/api/moas/users/:id", async (req, res) => {
     }
 
     const saved = await saveUser(mergedData as any);
-    return res.json({ success: true, user: saved, message: "Profile saved to Cloud Firestore and permanent storage." });
+    return res.json({
+      success: true,
+      user: sanitizeUser(saved),
+      message: "Profile saved to Cloud Firestore and permanent storage.",
+    });
   } catch (e: any) {
     console.error("Error updating user:", e);
     return res.status(500).json({ success: false, error: e.message });
@@ -764,11 +903,15 @@ app.post("/api/moas/users", async (req, res) => {
 
   const permanentId = id || (existingIdx !== -1 ? SERVER_USERS[existingIdx].id : `MOAS-ID-${Math.floor(10000 + Math.random() * 90000)}`);
 
+  // Securely hash password using scrypt
+  const rawPass = password ? String(password).trim() : "User@2026!";
+  const hashedPassword = rawPass.startsWith("scrypt:") ? rawPass : hashPassword(rawPass);
+
   if (existingIdx !== -1) {
     SERVER_USERS[existingIdx] = {
       ...SERVER_USERS[existingIdx],
       username: username || SERVER_USERS[existingIdx].username,
-      password: password || SERVER_USERS[existingIdx].password,
+      password: hashedPassword,
       name: name || SERVER_USERS[existingIdx].name,
       email: email || SERVER_USERS[existingIdx].email,
       phone: phone || SERVER_USERS[existingIdx].phone,
@@ -812,12 +955,18 @@ app.post("/api/moas/users", async (req, res) => {
       createdAt: SERVER_USERS[existingIdx].createdAt,
     });
 
-    return res.json({ success: true, user: SERVER_USERS[existingIdx], message: "User profile successfully saved to permanent storage." });
+    const token = createSession(SERVER_USERS[existingIdx]);
+    return res.json({
+      success: true,
+      token,
+      user: sanitizeUser(SERVER_USERS[existingIdx]),
+      message: "User profile successfully saved to permanent storage.",
+    });
   } else {
     const newUser: ServerUserRecord = {
       id: permanentId,
       username: username || permanentId.toLowerCase(),
-      password: password || "User@2026!",
+      password: hashedPassword,
       name: name || "New User",
       email: email || `${permanentId.toLowerCase()}@moas.internal`,
       phone: phone || "+91 98000 00000",
@@ -863,21 +1012,36 @@ app.post("/api/moas/users", async (req, res) => {
       createdAt: newUser.createdAt,
     });
 
-    return res.json({ success: true, user: newUser, message: "User registered and permanently saved to storage." });
+    const token = createSession(newUser);
+    return res.json({
+      success: true,
+      token,
+      user: sanitizeUser(newUser),
+      message: "User registered and permanently saved to storage.",
+    });
   }
 });
 
-// Upload and permanently attach Resume / CV
-app.post("/api/moas/upload-resume", (req, res) => {
+// Upload and permanently attach Resume / CV (Requires Authentication & Ownership)
+app.post("/api/moas/upload-resume", requireAuth, (req: AuthenticatedRequest, res) => {
   const { email, userId, resume } = req.body;
   if (!resume || !resume.name) {
     return res.status(400).json({ success: false, error: "Resume object with name is required" });
   }
 
+  const callerId = req.user!.userId.toLowerCase();
+  const callerEmail = req.user!.email.toLowerCase();
+  const targetId = (userId || "").toLowerCase();
+  const targetEmail = (email || "").toLowerCase();
+
+  if (callerId !== targetId && callerEmail !== targetEmail && req.user!.role.toLowerCase() !== "admin") {
+    return res.status(403).json({ success: false, error: "Access denied. Cannot upload resumes for another user." });
+  }
+
   let user = SERVER_USERS.find(
     (u) =>
-      (userId && u.id.toLowerCase() === userId.toLowerCase()) ||
-      (email && u.email.toLowerCase() === email.toLowerCase())
+      (userId && u.id.toLowerCase() === targetId) ||
+      (email && u.email.toLowerCase() === targetEmail)
   );
 
   const newResumeItem: ServerResumeItem = {
@@ -906,13 +1070,18 @@ app.post("/api/moas/upload-resume", (req, res) => {
       isPrimary: newResumeItem.isPrimary,
     }).catch(console.error);
 
-    return res.json({ success: true, resumes: user.resumes, user, message: "Resume permanently stored to ID " + user.id });
+    return res.json({
+      success: true,
+      resumes: user.resumes,
+      user: sanitizeUser(user),
+      message: "Resume permanently stored to ID " + user.id,
+    });
   } else {
-    const fallbackId = userId || `MOAS-ID-${Math.floor(10000 + Math.random() * 90000)}`;
+    const fallbackId = userId || req.user!.userId;
     const fallbackUser: ServerUserRecord = {
       id: fallbackId,
-      name: "Candidate",
-      email: email || `${fallbackId.toLowerCase()}@moas.internal`,
+      name: req.user!.name || "Candidate",
+      email: email || req.user!.email,
       phone: "+91 98450 12345",
       role: "Candidate",
       avatarUrl: "https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=400&h=400&fit=crop&crop=faces",
@@ -932,33 +1101,52 @@ app.post("/api/moas/upload-resume", (req, res) => {
       isPrimary: newResumeItem.isPrimary,
     }).catch(console.error);
 
-    return res.json({ success: true, resumes: fallbackUser.resumes, user: fallbackUser, message: "Resume permanently stored to ID " + fallbackUser.id });
+    return res.json({
+      success: true,
+      resumes: fallbackUser.resumes,
+      user: sanitizeUser(fallbackUser),
+      message: "Resume permanently stored to ID " + fallbackUser.id,
+    });
   }
 });
 
-// Update profile photo permanently
-app.post("/api/moas/update-photo", (req, res) => {
+// Update profile photo permanently (Requires Authentication & Ownership)
+app.post("/api/moas/update-photo", requireAuth, (req: AuthenticatedRequest, res) => {
   const { email, userId, avatarUrl } = req.body;
   if (!avatarUrl) {
     return res.status(400).json({ success: false, error: "avatarUrl is required" });
   }
 
+  const callerId = req.user!.userId.toLowerCase();
+  const callerEmail = req.user!.email.toLowerCase();
+  const targetId = (userId || "").toLowerCase();
+  const targetEmail = (email || "").toLowerCase();
+
+  if (callerId !== targetId && callerEmail !== targetEmail && req.user!.role.toLowerCase() !== "admin") {
+    return res.status(403).json({ success: false, error: "Access denied. Cannot update photo for another user." });
+  }
+
   let user = SERVER_USERS.find(
     (u) =>
-      (userId && u.id.toLowerCase() === userId.toLowerCase()) ||
-      (email && u.email.toLowerCase() === email.toLowerCase())
+      (userId && u.id.toLowerCase() === targetId) ||
+      (email && u.email.toLowerCase() === targetEmail)
   );
 
   if (user) {
     user.avatarUrl = avatarUrl;
     updateUserPhoto(user.id, avatarUrl).catch(console.error);
-    return res.json({ success: true, avatarUrl, user, message: "Avatar photo permanently saved to ID " + user.id });
+    return res.json({
+      success: true,
+      avatarUrl,
+      user: sanitizeUser(user),
+      message: "Avatar photo permanently saved to ID " + user.id,
+    });
   } else {
-    const fallbackId = userId || `MOAS-ID-${Math.floor(10000 + Math.random() * 90000)}`;
+    const fallbackId = userId || req.user!.userId;
     const fallbackUser: ServerUserRecord = {
       id: fallbackId,
-      name: "Candidate",
-      email: email || `${fallbackId.toLowerCase()}@moas.internal`,
+      name: req.user!.name || "Candidate",
+      email: email || req.user!.email,
       phone: "+91 98450 12345",
       role: "Candidate",
       avatarUrl,
@@ -968,7 +1156,12 @@ app.post("/api/moas/update-photo", (req, res) => {
     };
     SERVER_USERS.unshift(fallbackUser);
     updateUserPhoto(fallbackId, avatarUrl).catch(console.error);
-    return res.json({ success: true, avatarUrl, user: fallbackUser, message: "Avatar photo permanently saved to ID " + fallbackUser.id });
+    return res.json({
+      success: true,
+      avatarUrl,
+      user: sanitizeUser(fallbackUser),
+      message: "Avatar photo permanently saved to ID " + fallbackUser.id,
+    });
   }
 });
 
@@ -1545,9 +1738,9 @@ app.post("/api/otp/send", async (req, res) => {
       createdAt: now,
     });
 
-    // Send SMS via TextBee (uses environment variables, or falls back to project credentials so it works across all systems)
-    const TEXTBEE_API_KEY = process.env.TEXTBEE_API_KEY || "txb_AlW6gePvh1DqXiu25yv3rWVvtaMSSEgv";
-    const TEXTBEE_DEVICE_ID = process.env.TEXTBEE_DEVICE_ID || "6aa62ccac949ca6c4eeade65";
+    // Send SMS via TextBee (strictly configured via environment variables)
+    const TEXTBEE_API_KEY = process.env.TEXTBEE_API_KEY;
+    const TEXTBEE_DEVICE_ID = process.env.TEXTBEE_DEVICE_ID;
 
     if (!TEXTBEE_API_KEY || !TEXTBEE_DEVICE_ID) {
       console.warn("[OTP] TextBee credentials not configured. Configure TEXTBEE_API_KEY and TEXTBEE_DEVICE_ID in .env.");
@@ -1677,7 +1870,7 @@ app.post("/api/otp/verify", async (req, res) => {
 });
 
 // Setup Vite middleware in dev or static files in prod
-async function setupVite() {
+export async function setupVite() {
   if (process.env.NODE_ENV !== "production") {
     const { createServer: createViteServer } = await import("vite");
     const vite = await createViteServer({
@@ -1693,11 +1886,15 @@ async function setupVite() {
     });
   }
 
-  app.listen(PORT, "0.0.0.0", () => {
+  return app.listen(PORT, "0.0.0.0", () => {
     console.log(`MOAS Server running on http://0.0.0.0:${PORT}`);
   });
 }
 
-setupVite().catch((err) => {
-  console.error("Failed to start MOAS server:", err);
-});
+export { app };
+
+if (process.env.NODE_ENV !== "test") {
+  setupVite().catch((err) => {
+    console.error("Failed to start MOAS server:", err);
+  });
+}

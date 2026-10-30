@@ -229,9 +229,15 @@ export default function App() {
 
   // Resilient JSON fetch helper with retry for cold-start resilience
   const safeFetchJson = async <T,>(url: string, retries = 2, delayMs = 600): Promise<T | null> => {
+    const token = localStorage.getItem("moas_auth_token");
+    const headers: Record<string, string> = {};
+    if (token) {
+      headers["Authorization"] = `Bearer ${token}`;
+    }
+
     for (let attempt = 0; attempt <= retries; attempt++) {
       try {
-        const res = await fetch(url);
+        const res = await fetch(url, { headers });
         if (res.ok) {
           const data = await res.json();
           return data as T;
@@ -246,6 +252,16 @@ export default function App() {
       }
     }
     return null;
+  };
+
+  // Authenticated fetch wrapper for state mutations
+  const authFetch = (url: string, init?: RequestInit): Promise<Response> => {
+    const token = localStorage.getItem("moas_auth_token");
+    const headers = new Headers(init?.headers || {});
+    if (token && !headers.has("Authorization")) {
+      headers.set("Authorization", `Bearer ${token}`);
+    }
+    return fetch(url, { ...init, headers });
   };
 
   // Synchronize initial data from Backend and Cloud Firestore Database
@@ -729,11 +745,18 @@ export default function App() {
       }));
 
       // Synchronize permanent candidate or employer record to backend
-      fetch("/api/moas/users", {
+      authFetch("/api/moas/users", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(pendingUser),
-      }).catch((e) => console.warn("[MOAS User Sync]", e?.message || e));
+      })
+        .then((res) => res.json())
+        .then((data) => {
+          if (data?.token) {
+            localStorage.setItem("moas_auth_token", data.token);
+          }
+        })
+        .catch((e) => console.warn("[MOAS User Sync]", e?.message || e));
 
       setPendingUser(null);
     }
@@ -746,6 +769,14 @@ export default function App() {
 
   // Logout handler
   const handleLogout = () => {
+    const token = localStorage.getItem("moas_auth_token");
+    localStorage.removeItem("moas_auth_token");
+    if (token) {
+      fetch("/api/auth/logout", {
+        method: "POST",
+        headers: { Authorization: `Bearer ${token}` },
+      }).catch(console.warn);
+    }
     setIsAuthenticated(false);
     setCurrentNav("login");
   };
@@ -756,7 +787,7 @@ export default function App() {
     );
 
     // Persist saved job to database
-    fetch("/api/saved-jobs", {
+    authFetch("/api/saved-jobs", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ userId: user.id, jobId }),
@@ -767,7 +798,7 @@ export default function App() {
     setJobs((prev) => [newJob, ...prev]);
 
     // Persist new job to Cloud Firestore database
-    fetch("/api/jobs", {
+    authFetch("/api/jobs", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
@@ -822,7 +853,7 @@ export default function App() {
     setProfileViews((prev) => prev + 2);
 
     // Persist job application to Cloud Firestore database
-    fetch("/api/applications", {
+    authFetch("/api/applications", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
@@ -947,7 +978,7 @@ export default function App() {
     );
 
     // Persist status update to Cloud Firestore database
-    fetch(`/api/applications/${appId}`, {
+    authFetch(`/api/applications/${appId}`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ status: newStatus }),
@@ -972,7 +1003,7 @@ export default function App() {
     setApplications((prev) => prev.filter((a) => a.id !== appId));
 
     // Remove from Cloud Firestore database
-    fetch(`/api/applications/${appId}`, {
+    authFetch(`/api/applications/${appId}`, {
       method: "DELETE",
     }).catch((e) => console.warn("[MOAS Delete App Sync]", e?.message || e));
   };
@@ -1208,7 +1239,7 @@ export default function App() {
 
     // 3. Persist to backend and Google Cloud Firestore database
     try {
-      await fetch(`/api/moas/users/${updated.id}`, {
+      await authFetch(`/api/moas/users/${updated.id}`, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({

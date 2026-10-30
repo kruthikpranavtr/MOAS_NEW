@@ -361,6 +361,8 @@ export async function pgUpsertUser(user: DBUser) {
       quote, about_me, skills, experience_level, education, resumes, created_at, updated_at
     ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23)
     ON CONFLICT (id) DO UPDATE SET
+      username = CASE WHEN EXCLUDED.username <> '' THEN EXCLUDED.username ELSE users.username END,
+      password = CASE WHEN EXCLUDED.password <> '' THEN EXCLUDED.password ELSE users.password END,
       name = EXCLUDED.name,
       email = EXCLUDED.email,
       phone = EXCLUDED.phone,

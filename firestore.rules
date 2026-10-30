@@ -69,68 +69,71 @@ service cloud.firestore {
         data.type is string && data.type.size() <= 20;
     }
 
-    // 1. Users Collection
+    // 1. Users Collection - Require authentication and resource ownership
     match /users/{userId} {
-      allow read: if true;
-      allow create, update: if isValidId(userId) && isValidUser(incoming());
-      allow delete: if isValidId(userId);
+      allow read: if isSignedIn();
+      allow create: if isOwner(userId) && isValidUser(incoming());
+      allow update: if isOwner(userId) && isValidUser(incoming());
+      allow delete: if isOwner(userId) || isAdmin();
     }
 
-    // 2. Jobs Collection
+    // 2. Jobs Collection - Public read, Employer/Admin write
     match /jobs/{jobId} {
       allow read: if true;
-      allow create, update: if isValidId(jobId) && isValidJob(incoming());
-      allow delete: if isValidId(jobId);
+      allow create: if isSignedIn() && (request.auth.token.role in ['Employer', 'employer'] || isAdmin()) && isValidJob(incoming());
+      allow update: if isSignedIn() && (request.auth.token.role in ['Employer', 'employer'] || isAdmin()) && isValidJob(incoming());
+      allow delete: if isSignedIn() && (request.auth.token.role in ['Employer', 'employer'] || isAdmin());
     }
 
-    // 3. Applications Collection
+    // 3. Applications Collection - Candidate or Employer/Admin access
     match /applications/{applicationId} {
-      allow read: if true;
-      allow create, update: if isValidId(applicationId) && isValidApplication(incoming());
-      allow delete: if isValidId(applicationId);
+      allow read: if isSignedIn() && (resource == null || resource.data.candidateId == request.auth.uid || request.auth.token.role in ['Employer', 'employer'] || isAdmin());
+      allow create: if isSignedIn() && request.auth.uid == incoming().candidateId && isValidApplication(incoming());
+      allow update: if isSignedIn() && (request.auth.token.role in ['Employer', 'employer'] || resource.data.candidateId == request.auth.uid || isAdmin()) && isValidApplication(incoming());
+      allow delete: if isSignedIn() && (resource.data.candidateId == request.auth.uid || isAdmin());
     }
 
-    // 4. Resumes Collection
+    // 4. Resumes Collection - Owner or Recruiter/Admin access
     match /resumes/{resumeId} {
-      allow read: if true;
-      allow create, update: if isValidId(resumeId) && isValidResume(incoming());
-      allow delete: if isValidId(resumeId);
+      allow read: if isSignedIn() && (resource == null || resource.data.userId == request.auth.uid || request.auth.token.role in ['Employer', 'employer'] || isAdmin());
+      allow create, update: if isSignedIn() && request.auth.uid == incoming().userId && isValidResume(incoming());
+      allow delete: if isSignedIn() && (resource.data.userId == request.auth.uid || isAdmin());
     }
 
-    // 5. Companies Collection
+    // 5. Companies Collection - Public read, Employer/Admin write
     match /companies/{companyId} {
       allow read: if true;
-      allow write: if isValidId(companyId);
+      allow write: if isSignedIn() && (request.auth.token.role in ['Employer', 'employer'] || isAdmin());
     }
 
-    // 6. Saved Jobs Collection
+    // 6. Saved Jobs Collection - Candidate ownership
     match /savedJobs/{savedJobId} {
-      allow read: if true;
-      allow write: if isValidId(savedJobId);
+      allow read: if isSignedIn() && (resource == null || resource.data.userId == request.auth.uid || isAdmin());
+      allow write: if isSignedIn() && (incoming().userId == request.auth.uid || isAdmin());
     }
 
-    // 7. Job Alerts Collection
+    // 7. Job Alerts Collection - Candidate ownership
     match /jobAlerts/{alertId} {
-      allow read: if true;
-      allow write: if isValidId(alertId);
+      allow read: if isSignedIn() && (resource == null || resource.data.userId == request.auth.uid || isAdmin());
+      allow write: if isSignedIn() && (incoming().userId == request.auth.uid || isAdmin());
     }
 
-    // 8. Company Ratings & Reviews Collection
+    // 8. Company Ratings & Reviews Collection - Public read, Owner write
     match /companyRatings/{ratingId} {
       allow read: if true;
-      allow write: if isValidId(ratingId);
+      allow create: if isSignedIn() && incoming().userId == request.auth.uid;
+      allow update, delete: if isSignedIn() && (resource.data.userId == request.auth.uid || isAdmin());
     }
 
-    // 9. Profile Views Collection (Live Verified Recruiter & Employer Impressions)
+    // 9. Profile Views Collection - Recruiter/Employer impressions
     match /profileViews/{viewId} {
-      allow read: if true;
-      allow write: if isValidId(viewId);
+      allow read: if isSignedIn() && (resource == null || resource.data.userId == request.auth.uid || isAdmin());
+      allow write: if isSignedIn();
     }
 
-    // 10. OTP Dispatches (Mobile Phone & Gmail Verification Codes)
+    // 10. OTP Dispatches - Strictly internal backend operations, deny direct client access
     match /otps/{otpId} {
-      allow read: if true;
-      allow write: if isValidId(otpId);
+      allow read, write: if false;
     }
   }
 }

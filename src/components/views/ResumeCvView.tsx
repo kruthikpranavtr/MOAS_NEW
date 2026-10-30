@@ -84,9 +84,13 @@ export const ResumeCvView: React.FC<ResumeCvViewProps> = ({ user, onUpdateUser }
       }
 
       // Sync with server
+      const token = localStorage.getItem("moas_auth_token");
       fetch("/api/moas/upload-resume", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
         body: JSON.stringify({
           userId: user.id,
           email: user.email,
