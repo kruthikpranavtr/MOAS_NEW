@@ -63,3 +63,16 @@ export interface IProfileViewRepository {
   record(view: Partial<ProfileViewRecord>): Promise<ProfileViewRecord>;
   clear(userId?: string): Promise<{ success: boolean; cleared: number } | boolean>;
 }
+
+export interface IEmployerProfileRepository {
+  getByUserId(userId: string): Promise<import("../models/types.js").EmployerProfileRecord | null>;
+  upsert(userId: string, data: Partial<import("../models/types.js").EmployerProfileRecord>): Promise<import("../models/types.js").EmployerProfileRecord>;
+}
+
+export interface ICompanyMemberRepository {
+  getMembership(companyId: string, userId: string): Promise<import("../models/types.js").CompanyMemberRecord | null>;
+  getUserCompanies(userId: string): Promise<import("../models/types.js").CompanyMemberRecord[]>;
+  getCompanyMembers(companyId: string): Promise<import("../models/types.js").CompanyMemberRecord[]>;
+}
+
+

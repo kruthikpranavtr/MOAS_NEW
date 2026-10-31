@@ -90,9 +90,9 @@ export const RateCompanyModal: React.FC<RateCompanyModalProps> = ({
     try {
       const payload = {
         companyName: companyName.trim(),
-        userId: currentUser?.id || "MOAS-VERIFIED-USER",
-        userName: currentUser?.fullName || "Verified Engineer",
-        userRole: currentUser?.role || "Software Engineer",
+        userId: currentUser?.id,
+        userName: currentUser?.fullName,
+        userRole: currentUser?.role,
         userAvatar: currentUser?.profilePhoto || "https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=100&h=100&fit=crop",
         rating,
         cultureRating,
@@ -106,19 +106,29 @@ export const RateCompanyModal: React.FC<RateCompanyModalProps> = ({
         recommendToFriend,
       };
 
-      const res = await fetch("/api/moas/ratings", {
+      const token = localStorage.getItem("moas_auth_token");
+      const headers: Record<string, string> = { "Content-Type": "application/json" };
+      if (token) headers["Authorization"] = `Bearer ${token}`;
+
+      const res = await fetch("/api/v1/companies/ratings", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers,
+        credentials: "include",
         body: JSON.stringify(payload),
       });
 
       const data = await res.json();
-      if (!res.ok || !data.success) {
-        throw new Error(data.error || "Failed to submit rating.");
+      if (!res.ok || (!data.success && !data.rating && !data.data?.rating)) {
+        throw new Error(data.error || data.message || "Failed to submit rating.");
       }
 
+      const submittedRating = data.rating || data.data?.rating;
+      const updatedCompany = data.updatedCompany || data.company || data.data?.company;
+
       setSuccessMessage(`Review for ${companyName} submitted successfully!`);
-      onRatingSubmitted(data.rating, data.updatedCompany);
+      if (submittedRating) {
+        onRatingSubmitted(submittedRating, updatedCompany);
+      }
 
       setTimeout(() => {
         setIsSubmitting(false);

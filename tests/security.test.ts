@@ -284,7 +284,7 @@ test("MOAS Security & Production Runtime Test Suite", async (t) => {
 
     const otpRes = await request(app)
       .post("/api/otp/send")
-      .send({ phone: "+91 99999 88888" });
+      .send({ phone: `+91 99999 ${String(Date.now()).slice(-5)}` });
 
     assert.equal(otpRes.status, 200);
     assert.equal(otpRes.body.success, true);

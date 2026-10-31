@@ -44,6 +44,7 @@ import {
 } from "../../types";
 import { PhotoUploadModal } from "../modals/PhotoUploadModal";
 import { getInitialsAvatar } from "../../data/mockData";
+import { EmployerCompanyProfileView } from "./EmployerCompanyProfileView";
 
 interface ProfileViewProps {
   user: UserProfile;
@@ -68,6 +69,18 @@ export const ProfileView: React.FC<ProfileViewProps> = ({
   onNavigate,
   onOpenLiveViewsModal,
 }) => {
+  // If user is an Employer or Recruiter, render the complete Employer & Company profile management view
+  const roleLower = (user.role || "").toLowerCase();
+  if (roleLower === "employer" || roleLower === "recruiter") {
+    return (
+      <EmployerCompanyProfileView
+        user={user}
+        onUpdateUser={onUpdateUser}
+        onNavigate={onNavigate}
+      />
+    );
+  }
+
   const [isEditing, setIsEditing] = useState(false);
   const [isPhotoModalOpen, setIsPhotoModalOpen] = useState(false);
 

@@ -130,17 +130,51 @@ export class AuthService {
     };
 
     const savedUser = await withTransaction(async (client) => {
-      // If employer, ensure company record exists
+      const user = await userRepository.save(userToSave);
+
+      // If employer, ensure company, member, and profile records exist
       if (role === "Employer" && data.companyName) {
+        const cleanCompName = data.companyName.trim();
+        const existingCompRes = await client.query(
+          `SELECT id, owner_user_id FROM moas.companies WHERE LOWER(name) = LOWER($1);`,
+          [cleanCompName]
+        );
+
+        let compId: string;
+        let isOwner = false;
+
+        if (existingCompRes.rows.length === 0) {
+          compId = `comp-${Date.now()}-${Math.floor(1000 + Math.random() * 9000)}`;
+          await client.query(
+            `INSERT INTO moas.companies (id, name, industry, location, rating, reviews_count, verification_status, owner_user_id)
+             VALUES ($1, $2, $3, $4, 0.0, 0, 'pending', $5);`,
+            [compId, cleanCompName, data.industry || "Technology", data.location || "Bangalore, India", permanentId]
+          );
+          isOwner = true;
+        } else {
+          compId = existingCompRes.rows[0].id;
+          if (!existingCompRes.rows[0].owner_user_id) {
+            await client.query(`UPDATE moas.companies SET owner_user_id = $1 WHERE id = $2;`, [permanentId, compId]);
+            isOwner = true;
+          }
+        }
+
         await client.query(
-          `INSERT INTO moas.companies (id, name, industry, location, rating, reviews_count)
-          VALUES ($1, $2, $3, $4, 4.5, 0)
-          ON CONFLICT (name) DO NOTHING;`,
-          [`comp-${Date.now()}`, data.companyName, data.industry || "Technology", data.location || "Bangalore, India"]
+          `INSERT INTO moas.company_members (id, company_id, user_id, role, status)
+           VALUES ($1, $2, $3, $4, 'accepted')
+           ON CONFLICT (company_id, user_id) DO NOTHING;`,
+          [`mem-${Date.now()}-${Math.floor(1000 + Math.random() * 9000)}`, compId, permanentId, isOwner ? "owner" : "member"]
+        );
+
+        await client.query(
+          `INSERT INTO moas.employer_profiles (id, user_id, business_email, designation, location)
+           VALUES ($1, $2, $3, $4, $5)
+           ON CONFLICT (user_id) DO NOTHING;`,
+          [`emp-prof-${permanentId}`, permanentId, email, data.contactPerson || "Hiring Manager", data.location || "Bangalore, India"]
         );
       }
 
-      return await userRepository.save(userToSave);
+      return user;
     });
 
     // Create session in PostgreSQL

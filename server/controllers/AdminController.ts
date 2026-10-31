@@ -56,29 +56,26 @@ export class AdminController {
   async verifyCompany(req: AuthenticatedRequest, res: Response) {
     try {
       const { id } = req.params;
-      const verified = req.body.verified !== undefined ? Boolean(req.body.verified) : true;
+      const status = req.body.status || (req.body.verified !== undefined ? (req.body.verified ? "verified" : "rejected") : "verified");
+      const notes = req.body.notes || req.body.verificationNotes;
 
-      const updated = await companyRepository.verifyCompany(id, verified);
-      if (!updated) {
-        return sendError(res, `Company with ID "${id}" not found`, 404);
-      }
+      const adminSession = {
+        userId: req.user!.userId,
+        role: req.user!.role,
+        email: req.user!.email,
+      };
 
-      await auditLogger.log({
-        req,
-        action: "ADMIN_COMPANY_VERIFIED",
-        resourceType: "company",
-        resourceId: id,
-        details: { companyName: updated.name, verified },
-        outcome: "SUCCESS",
-      });
+      const { companyService } = await import("../services/CompanyService.js");
+      const updated = await companyService.updateVerificationStatus(id, status, notes, adminSession);
 
       return sendSuccess(res, {
         company: updated,
-        message: `Company "${updated.name}" verification set to ${verified}.`,
+        message: `Company "${updated.name}" verification status updated to "${updated.verificationStatus}".`,
       });
     } catch (error: any) {
       logger.error("[Admin] verifyCompany error:", error);
-      return sendError(res, error.message || "Failed to verify company", 500);
+      const statusCode = error.message.includes("not found") ? 404 : 400;
+      return sendError(res, error.message || "Failed to verify company", statusCode);
     }
   }
 }

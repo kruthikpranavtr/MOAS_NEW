@@ -213,8 +213,9 @@ test("PostgreSQL Database Architecture & Integration Test Suite", async (t) => {
     await jobRepository.delete(testJobId);
     await query("DELETE FROM users WHERE id = $1;", [testUserId]);
   });
+
+  test.after(async () => {
+    await closePool();
+  });
 });
 
-test.after(async () => {
-  await closePool();
-});

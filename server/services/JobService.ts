@@ -1,9 +1,11 @@
 import { jobRepository } from "../repositories/JobRepository.js";
+import { companyMemberRepository } from "../repositories/CompanyMemberRepository.js";
 import { JobRecord } from "../models/types.js";
+import { auditLogger } from "../utils/auditLogger.js";
 
 export class JobService {
   async getAllJobs(
-    filtersOrSearch?: string | { search?: string; category?: string; department?: string; location?: string; employerId?: string },
+    filtersOrSearch?: string | { search?: string; category?: string; department?: string; location?: string; employerId?: string; status?: string },
     dept?: string,
     loc?: string
   ): Promise<JobRecord[]> {
@@ -11,7 +13,8 @@ export class JobService {
       const search = filtersOrSearch.search;
       const department = filtersOrSearch.department || filtersOrSearch.category;
       const location = filtersOrSearch.location;
-      let jobs = await jobRepository.getAll(search, department, location);
+      const status = filtersOrSearch.status;
+      let jobs = await jobRepository.getAll(search, department, location, status);
       if (filtersOrSearch.employerId) {
         jobs = jobs.filter((j) => j.employerId === filtersOrSearch.employerId);
       }
@@ -23,6 +26,14 @@ export class JobService {
 
   async getJobById(id: string): Promise<JobRecord | null> {
     return await jobRepository.getById(id);
+  }
+
+  async getEmployerJobs(
+    employerId: string,
+    status?: string,
+    search?: string
+  ): Promise<JobRecord[]> {
+    return await jobRepository.getByEmployer(employerId, status, search);
   }
 
   async createJob(data: Partial<JobRecord>): Promise<JobRecord> {
@@ -45,6 +56,7 @@ export class JobService {
       tags: data.tags || [],
       isVerified: true,
       postedDate: "Just now",
+      status: data.status || "open",
       workMode: data.workMode || "Hybrid",
       applicantCount: 0,
       ...(data.logoUrl ? { logoUrl: data.logoUrl } : {}),
@@ -67,6 +79,47 @@ export class JobService {
     };
 
     return await jobRepository.save(merged);
+  }
+
+  async updateJobStatus(
+    id: string,
+    status: "open" | "published" | "draft" | "closed" | "archived" | string,
+    callerSession: { userId: string; role: string; email?: string }
+  ): Promise<JobRecord | null> {
+    const existing = await jobRepository.getById(id);
+    if (!existing) return null;
+
+    const callerRole = (callerSession.role || "").toLowerCase();
+    if (callerRole !== "admin") {
+      const isOwner = existing.employerId === callerSession.userId;
+      const isCompanyMember = existing.companyId
+        ? await companyMemberRepository.isUserInCompany(callerSession.userId, existing.companyId)
+        : false;
+
+      if (!isOwner && !isCompanyMember) {
+        throw new Error("Forbidden: You are not authorized to change the status of this job.");
+      }
+    }
+
+    const validStatuses = ["open", "active", "published", "draft", "closed", "archived"];
+    if (!validStatuses.includes(status.toLowerCase())) {
+      throw new Error(`Invalid status "${status}". Allowed: ${validStatuses.join(", ")}`);
+    }
+
+    const updated = await jobRepository.updateStatus(id, status.toLowerCase());
+
+    await auditLogger.log({
+      actorId: callerSession.userId,
+      actorEmail: callerSession.email,
+      actorRole: callerSession.role,
+      action: "JOB_STATUS_UPDATED",
+      resourceType: "job",
+      resourceId: id,
+      details: { oldStatus: existing.status, newStatus: status },
+      outcome: "SUCCESS",
+    });
+
+    return updated;
   }
 
   async deleteJob(id: string): Promise<boolean> {

@@ -17,7 +17,9 @@ export class ApplicationService {
   async getApplications(
     caller: { userId: string; role: string },
     filterCandidateId?: string,
-    filterJobId?: string
+    filterJobId?: string,
+    filterStatus?: string,
+    search?: string
   ): Promise<ApplicationRecord[]> {
     const role = (caller.role || "").toLowerCase();
 
@@ -28,7 +30,7 @@ export class ApplicationService {
 
     if (role === "employer") {
       // Employers may only view applicants for their verified company's jobs
-      return await applicationRepository.getForEmployer(caller.userId, filterJobId);
+      return await applicationRepository.getForEmployer(caller.userId, filterJobId, filterStatus, search);
     }
 
     if (role === "admin") {
@@ -36,7 +38,6 @@ export class ApplicationService {
       return await applicationRepository.getAll(filterCandidateId);
     }
 
-    // Default to empty array for unrecognized roles
     return [];
   }
 
@@ -91,7 +92,7 @@ export class ApplicationService {
       candidateName: data.candidateName || candidateSession.name || "Candidate",
       candidateEmail: data.candidateEmail || candidateSession.email || "candidate@email.com",
       appliedDate: new Date().toLocaleDateString("en-US", { month: "short", day: "2-digit", year: "numeric" }),
-      status: "Applied", // Untrusted user cannot self-assign Shortlisted or Offered
+      status: "Applied",
       stage: "Initial Screening",
       matchScore: data.matchScore || 90,
       resumeName: data.resumeName || "Resume.pdf",
@@ -139,7 +140,9 @@ export class ApplicationService {
       // Validate status transition policy
       const allowedTransitions = VALID_STATUS_TRANSITIONS[existing.status] || [];
       if (!allowedTransitions.includes(newStatus) && existing.status !== newStatus) {
-        throw new Error(`Invalid status transition: Cannot transition application from "${existing.status}" to "${newStatus}". Allowed: ${allowedTransitions.join(", ")}`);
+        throw new Error(
+          `Invalid status transition: Cannot transition application from "${existing.status}" to "${newStatus}". Allowed: ${allowedTransitions.join(", ")}`
+        );
       }
     }
 
@@ -153,6 +156,75 @@ export class ApplicationService {
         resourceType: "application",
         resourceId: id,
         details: { oldStatus: existing.status, newStatus, stage },
+        outcome: "SUCCESS",
+      });
+    }
+
+    return updated;
+  }
+
+  async addRecruiterNotes(
+    id: string,
+    notes: string,
+    caller: { userId: string; role: string; email?: string }
+  ): Promise<ApplicationRecord | null> {
+    const role = (caller.role || "").toLowerCase();
+    if (role !== "employer" && role !== "admin") {
+      throw new Error("Forbidden: Only recruiters or administrators can add internal recruiter notes.");
+    }
+
+    if (role === "employer") {
+      const isAuthorized = await applicationRepository.isApplicantForEmployer(id, caller.userId);
+      if (!isAuthorized) {
+        throw new Error("Forbidden: You can only add notes to applicants for your own company's jobs.");
+      }
+    }
+
+    const updated = await applicationRepository.updateRecruiterNotes(id, notes);
+    if (updated) {
+      await auditLogger.log({
+        actorId: caller.userId,
+        actorEmail: caller.email,
+        actorRole: caller.role,
+        action: "RECRUITER_NOTES_UPDATED",
+        resourceType: "application",
+        resourceId: id,
+        details: { notesLength: notes.length },
+        outcome: "SUCCESS",
+      });
+    }
+
+    return updated;
+  }
+
+  async scheduleInterview(
+    id: string,
+    scheduledAt: Date,
+    stage: string | undefined,
+    caller: { userId: string; role: string; email?: string }
+  ): Promise<ApplicationRecord | null> {
+    const role = (caller.role || "").toLowerCase();
+    if (role !== "employer" && role !== "admin") {
+      throw new Error("Forbidden: Only recruiters or administrators can schedule interviews.");
+    }
+
+    if (role === "employer") {
+      const isAuthorized = await applicationRepository.isApplicantForEmployer(id, caller.userId);
+      if (!isAuthorized) {
+        throw new Error("Forbidden: You can only schedule interviews for your own company's applicants.");
+      }
+    }
+
+    const updated = await applicationRepository.scheduleInterview(id, scheduledAt, stage);
+    if (updated) {
+      await auditLogger.log({
+        actorId: caller.userId,
+        actorEmail: caller.email,
+        actorRole: caller.role,
+        action: "INTERVIEW_SCHEDULED",
+        resourceType: "application",
+        resourceId: id,
+        details: { scheduledAt: scheduledAt.toISOString(), stage },
         outcome: "SUCCESS",
       });
     }

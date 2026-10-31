@@ -1,5 +1,6 @@
 import { Router } from "express";
 import { jobController } from "../../controllers/JobController.js";
+import { applicationController } from "../../controllers/ApplicationController.js";
 import { requireAuth, requireRole } from "../../middleware/auth.js";
 import { validateBody } from "../../middleware/validator.js";
 
@@ -15,6 +16,11 @@ router.post(
   validateBody(["title", "company", "description"]),
   (req, res) => jobController.createJob(req, res)
 );
+
+router.post("/:id/apply", requireAuth, (req, res) => {
+  req.body.jobId = req.params.id;
+  return applicationController.submitApplication(req, res);
+});
 
 router.put(
   "/:id",

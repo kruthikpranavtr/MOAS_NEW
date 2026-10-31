@@ -136,6 +136,7 @@ export interface JobRecord {
   tags: string[];
   isVerified: boolean;
   postedDate: string;
+  status?: "open" | "published" | "draft" | "closed" | "archived" | string;
   workMode?: string;
   logoUrl?: string;
   logo?: string;
@@ -156,11 +157,13 @@ export interface ApplicationRecord {
   candidateName: string;
   candidateEmail: string;
   appliedDate: string;
-  status: "Applied" | "Under Review" | "Shortlisted" | "Interview Scheduled" | "Rejected";
+  status: "Applied" | "Under Review" | "Shortlisted" | "Interview Scheduled" | "Interview" | "Offered" | "Hired" | "Rejected" | string;
   stage?: string;
   matchScore?: number;
   resumeName?: string;
   notes?: string;
+  recruiterNotes?: string;
+  interviewScheduledAt?: string;
 }
 
 export interface CompanyRecord {
@@ -174,16 +177,32 @@ export interface CompanyRecord {
   description?: string;
   logo?: string;
   logoUrl?: string;
+  logoStorageKey?: string;
   website?: string;
   openRolesCount?: number;
   openJobsCount?: number;
   verified?: boolean;
+  verificationStatus?: "pending" | "under_review" | "verified" | "rejected" | "suspended" | string;
+  verificationNotes?: string;
+  verifiedAt?: string;
+  verifiedBy?: string;
+  ownerUserId?: string;
+  headquarters?: string;
+  locations?: string[];
+  benefits?: string[];
+  culture?: string;
+  socialLinks?: Record<string, string>;
+  contactEmail?: string;
+  contactPhone?: string;
+  isArchived?: boolean;
   cultureRating?: number;
   workLifeRating?: number;
   growthRating?: number;
   compensationRating?: number;
   featuredReview?: string;
   tagline?: string;
+  createdAt?: string;
+  updatedAt?: string;
 }
 
 export interface CompanyRatingRecord {
@@ -264,8 +283,58 @@ export interface CompanyMemberRecord {
   userId: string;
   role: "owner" | "admin" | "recruiter" | "member";
   isVerified: boolean;
+  invitationEmail?: string;
+  invitationToken?: string;
+  status?: "pending" | "accepted" | "declined" | string;
+  invitedBy?: string;
+  expiresAt?: string;
+  userName?: string;
+  userEmail?: string;
+  userAvatar?: string;
   createdAt?: string;
   updatedAt?: string;
+}
+
+export interface EmployerProfileRecord {
+  id: string;
+  userId: string;
+  companyId?: string;
+  companyName?: string;
+  jobTitle?: string;
+  department?: string;
+  businessEmail?: string;
+  phone?: string;
+  designation?: string;
+  location?: string;
+  preferences?: Record<string, any>;
+  verified: boolean;
+  createdAt?: string;
+  updatedAt?: string;
+}
+
+export interface EmployerDashboardStats {
+  totalJobsPosted: number;
+  activeJobOpenings: number;
+  closedJobOpenings: number;
+  totalApplications: number;
+  newApplications: number;
+  underReviewApplications: number;
+  shortlistedCandidates: number;
+  interviewStageCandidates: number;
+  offeredCandidates: number;
+  hiredCandidates: number;
+  recentApplications: ApplicationRecord[];
+  recentActivity: Array<{
+    id: string;
+    type: string;
+    title: string;
+    description: string;
+    timestamp: string;
+    metadata?: Record<string, any>;
+  }>;
+  companyProfile?: CompanyRecord | null;
+  verificationStatus: string;
+  stats?: Record<string, number>;
 }
 
 export interface AuditLogRecord {
@@ -281,3 +350,4 @@ export interface AuditLogRecord {
   outcome: "SUCCESS" | "DENIED" | "FAILURE";
   createdAt?: string;
 }
+

@@ -173,11 +173,15 @@ export default function App() {
     try {
       // Execute fetches in parallel for fast initial load
       const [jobsData, appsData, usersData, compData, ratingsData, viewsData] = await Promise.all([
-        safeFetchJson<{ success: boolean; jobs?: any[] }>("/api/jobs"),
-        safeFetchJson<{ success: boolean; applications?: any[] }>("/api/applications"),
+        safeFetchJson<{ success: boolean; jobs?: any[]; data?: any }>("/api/jobs"),
+        safeFetchJson<{ success: boolean; applications?: any[]; data?: any }>("/api/applications"),
         safeFetchJson<{ success: boolean; users?: any[] }>("/api/moas/users"),
-        safeFetchJson<{ success: boolean; companies?: any[] }>("/api/moas/top-companies"),
-        safeFetchJson<{ success: boolean; ratings?: any[] }>("/api/moas/ratings"),
+        safeFetchJson<{ success: boolean; companies?: any[]; data?: any }>("/api/v1/companies?limit=50").then(
+          (res) => res || safeFetchJson<{ success: boolean; companies?: any[]; data?: any }>("/api/moas/top-companies")
+        ),
+        safeFetchJson<{ success: boolean; ratings?: any[]; data?: any }>("/api/v1/companies/ratings").then(
+          (res) => res || safeFetchJson<{ success: boolean; ratings?: any[]; data?: any }>("/api/moas/ratings")
+        ),
         safeFetchJson<{ success: boolean; count: number; views?: any[] }>("/api/moas/profile-views"),
       ]);
 
@@ -250,12 +254,14 @@ export default function App() {
       }
 
       // 4. Companies & Ratings
-      if (compData?.success && Array.isArray(compData.companies) && compData.companies.length > 0) {
-        setCompanies(compData.companies);
+      const companyList = compData?.data?.companies || compData?.companies;
+      if (Array.isArray(companyList) && companyList.length > 0) {
+        setCompanies(companyList);
       }
 
-      if (ratingsData?.success && Array.isArray(ratingsData.ratings)) {
-        setCompanyRatings(ratingsData.ratings);
+      const ratingList = ratingsData?.data?.ratings || ratingsData?.ratings;
+      if (Array.isArray(ratingList) && ratingList.length > 0) {
+        setCompanyRatings(ratingList);
       }
 
       // 5. Live profile views

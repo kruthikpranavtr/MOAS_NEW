@@ -41,6 +41,9 @@ export interface Job {
   matchScore?: number;
   rating?: number;
   reviewsCount?: number;
+  status?: "open" | "published" | "draft" | "closed" | "archived" | string;
+  companyId?: string;
+  employerId?: string;
 }
 
 export interface Application {
@@ -52,7 +55,16 @@ export interface Application {
   location: string;
   type: string;
   appliedDate: string;
-  status: "Applied" | "Under Review" | "Shortlisted" | "Interview Scheduled" | "Rejected";
+  status: "Applied" | "Under Review" | "Shortlisted" | "Interview Scheduled" | "Interview" | "Offered" | "Hired" | "Rejected" | string;
+  stage?: string;
+  candidateId?: string;
+  candidateName?: string;
+  candidateEmail?: string;
+  resumeName?: string;
+  notes?: string;
+  recruiterNotes?: string;
+  interviewScheduledAt?: string;
+  matchScore?: number;
 }
 
 export interface JobAlert {
@@ -252,6 +264,21 @@ export interface Company {
   employeesCount: string;
   openJobsCount: number;
   isVerified: boolean;
+  verificationStatus?: "pending" | "under_review" | "verified" | "rejected" | "suspended" | string;
+  verificationNotes?: string;
+  verifiedAt?: string;
+  verifiedBy?: string;
+  headquarters?: string;
+  locations?: string[];
+  benefits?: string[];
+  culture?: string;
+  socialLinks?: Record<string, string>;
+  contactEmail?: string;
+  contactPhone?: string;
+  website?: string;
+  description?: string;
+  ownerUserId?: string;
+  isArchived?: boolean;
   isFollowing?: boolean;
   cultureRating?: number;
   workLifeRating?: number;
@@ -259,6 +286,44 @@ export interface Company {
   compensationRating?: number;
   featuredReview?: string;
   tagline?: string;
+}
+
+export interface CompanyMember {
+  id: string;
+  companyId: string;
+  userId: string;
+  role: "owner" | "admin" | "recruiter" | "member";
+  isVerified: boolean;
+  invitationEmail?: string;
+  status?: "pending" | "accepted" | "declined" | string;
+  userName?: string;
+  userEmail?: string;
+  userAvatar?: string;
+  createdAt?: string;
+}
+
+export interface EmployerDashboardStats {
+  totalJobsPosted: number;
+  activeJobOpenings: number;
+  closedJobOpenings: number;
+  totalApplications: number;
+  newApplications: number;
+  underReviewApplications: number;
+  shortlistedCandidates: number;
+  interviewStageCandidates: number;
+  offeredCandidates: number;
+  hiredCandidates: number;
+  recentApplications: Application[];
+  recentActivity: Array<{
+    id: string;
+    type: string;
+    title: string;
+    description: string;
+    timestamp: string;
+    metadata?: Record<string, any>;
+  }>;
+  companyProfile?: Company | null;
+  verificationStatus: string;
 }
 
 export interface CompanyRating {

@@ -14,6 +14,7 @@ import databaseRoutes from "./database.routes.js";
 import messagingRoutes from "./messaging.routes.js";
 import notificationsRoutes from "./notifications.routes.js";
 import adminRoutes from "./admin.routes.js";
+import employerRoutes from "./employer.routes.js";
 
 const v1Router = Router();
 
@@ -32,5 +33,7 @@ v1Router.use("/db", databaseRoutes);
 v1Router.use("/messages", messagingRoutes);
 v1Router.use("/notifications", notificationsRoutes);
 v1Router.use("/admin", adminRoutes);
+v1Router.use("/employer", employerRoutes);
 
 export default v1Router;
+

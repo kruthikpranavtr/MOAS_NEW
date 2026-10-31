@@ -12,6 +12,7 @@ import { otpController } from "../controllers/OtpController.js";
 import { aiController } from "../controllers/AIController.js";
 import { databaseAdminController } from "../controllers/DatabaseAdminController.js";
 import { adminController } from "../controllers/AdminController.js";
+import { employerController } from "../controllers/EmployerController.js";
 import { requireAuth, requireRole, requireAdmin, optionalAuth } from "../middleware/auth.js";
 import { authRateLimiter, otpRateLimiter } from "../middleware/rateLimiter.js";
 
@@ -168,6 +169,40 @@ legacyRouter.patch("/admin/users/:id/role", requireAuth, requireAdmin, (req, res
 );
 legacyRouter.patch("/admin/companies/:id/verify", requireAuth, requireAdmin, (req, res) =>
   adminController.verifyCompany(req, res)
+);
+
+// ==========================================
+// 13. EMPLOYER MANAGEMENT (Legacy /api/employer/*)
+// ==========================================
+legacyRouter.get("/employer/dashboard", requireAuth, requireRole(["Employer", "employer", "Admin"]), (req, res) =>
+  employerController.getDashboard(req, res)
+);
+legacyRouter.get("/employer/profile", requireAuth, requireRole(["Employer", "employer", "Admin"]), (req, res) =>
+  employerController.getProfile(req, res)
+);
+legacyRouter.put("/employer/profile", requireAuth, requireRole(["Employer", "employer", "Admin"]), (req, res) =>
+  employerController.updateProfile(req, res)
+);
+legacyRouter.patch("/employer/profile", requireAuth, requireRole(["Employer", "employer", "Admin"]), (req, res) =>
+  employerController.updateProfile(req, res)
+);
+legacyRouter.get("/employer/jobs", requireAuth, requireRole(["Employer", "employer", "Admin"]), (req, res) =>
+  employerController.getJobs(req, res)
+);
+legacyRouter.patch("/employer/jobs/:id/status", requireAuth, requireRole(["Employer", "employer", "Admin"]), (req, res) =>
+  employerController.updateJobStatus(req, res)
+);
+legacyRouter.get("/employer/applicants", requireAuth, requireRole(["Employer", "employer", "Admin"]), (req, res) =>
+  employerController.getApplicants(req, res)
+);
+legacyRouter.patch("/employer/applications/:id/stage", requireAuth, requireRole(["Employer", "employer", "Admin"]), (req, res) =>
+  employerController.updateApplicationStage(req, res)
+);
+legacyRouter.patch("/employer/applications/:id/notes", requireAuth, requireRole(["Employer", "employer", "Admin"]), (req, res) =>
+  employerController.addRecruiterNotes(req, res)
+);
+legacyRouter.post("/employer/applications/:id/schedule-interview", requireAuth, requireRole(["Employer", "employer", "Admin"]), (req, res) =>
+  employerController.scheduleInterview(req, res)
 );
 
 export default legacyRouter;

@@ -16,5 +16,8 @@ router.patch("/users/:id/role", validateBody(["role"]), (req, res) =>
 router.patch("/companies/:id/verify", (req, res) =>
   adminController.verifyCompany(req, res)
 );
+router.put("/companies/:id/verify", (req, res) =>
+  adminController.verifyCompany(req, res)
+);
 
 export default router;
