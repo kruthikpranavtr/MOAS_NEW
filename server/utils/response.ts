@@ -55,6 +55,7 @@ export function sendError(
   const payload: ApiResponse = {
     success: false,
     error,
+    message: error,
     ...(code || defaultCode ? { code: code || defaultCode } : {}),
     ...extra,
   };

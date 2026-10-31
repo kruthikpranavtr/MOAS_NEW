@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import {
   Search,
   MapPin,
@@ -30,6 +30,7 @@ interface HomeViewProps {
   onNavigate: (nav: NavigationState) => void;
   onSelectJob: (job: Job) => void;
   onToggleSaveJob: (jobId: string) => void;
+  onSearchJobs?: (query: { keyword?: string; location?: string; category?: string }) => void;
 }
 
 export const HomeView: React.FC<HomeViewProps> = ({
@@ -37,6 +38,7 @@ export const HomeView: React.FC<HomeViewProps> = ({
   onNavigate,
   onSelectJob,
   onToggleSaveJob,
+  onSearchJobs,
 }) => {
   const [keyword, setKeyword] = useState("");
   const [location, setLocation] = useState("");
@@ -47,17 +49,61 @@ export const HomeView: React.FC<HomeViewProps> = ({
   const [activeDiagramTab, setActiveDiagramTab] = useState<"topology" | "pipeline" | "partyMode" | "mermaid">("topology");
   const [selectedNode, setSelectedNode] = useState<string>("engine");
 
-  const categories = [
-    { title: "Core Engineering", count: "12,540 Jobs", icon: Cpu, color: "text-teal-700 bg-teal-50 border-teal-200" },
-    { title: "Distributed Systems", count: "8,420 Jobs", icon: Layers, color: "text-indigo-700 bg-indigo-50 border-indigo-200" },
-    { title: "AI & ML Ops", count: "4,250 Jobs", icon: Sparkles, color: "text-purple-700 bg-purple-50 border-purple-200" },
-    { title: "Cloud Architecture", count: "3,620 Jobs", icon: Building2, color: "text-emerald-700 bg-emerald-50 border-emerald-200" },
-    { title: "Carrier & Telecom", count: "1,840 Jobs", icon: Radio, color: "text-amber-700 bg-amber-50 border-amber-200" },
-    { title: "High-Throughput Data", count: "2,350 Jobs", icon: Database, color: "text-blue-700 bg-blue-50 border-blue-200" },
-  ];
+  const [categories, setCategories] = useState<Array<{ title: string; count: string; icon: any; color: string }>>([
+    { title: "Software Engineering", count: "Loading...", icon: Cpu, color: "text-teal-700 bg-teal-50 border-teal-200" },
+    { title: "Data & Machine Learning", count: "Loading...", icon: Sparkles, color: "text-purple-700 bg-purple-50 border-purple-200" },
+    { title: "Cloud Architecture", count: "Loading...", icon: Building2, color: "text-emerald-700 bg-emerald-50 border-emerald-200" },
+    { title: "Product & Design", count: "Loading...", icon: Layers, color: "text-indigo-700 bg-indigo-50 border-indigo-200" },
+    { title: "Skilled Trade & Services", count: "Loading...", icon: Radio, color: "text-amber-700 bg-amber-50 border-amber-200" },
+    { title: "Algorithmic Trading", count: "Loading...", icon: Database, color: "text-blue-700 bg-blue-50 border-blue-200" },
+  ]);
+
+  // Fetch live category counts directly from PostgreSQL (Task 9)
+  useEffect(() => {
+    const fetchCounts = async () => {
+      try {
+        const res = await fetch("/api/v1/jobs/categories");
+        if (res.ok) {
+          const data = await res.json();
+          if (data.success && Array.isArray(data.data?.categories)) {
+            const countsMap = new Map<string, number>();
+            data.data.categories.forEach((item: any) => {
+              countsMap.set(item.category?.toLowerCase() || "", item.count);
+            });
+
+            setCategories((prev) =>
+              prev.map((cat) => {
+                const lower = cat.title.toLowerCase();
+                let matchingCount = 0;
+                for (const [k, v] of countsMap.entries()) {
+                  if (lower.includes(k) || k.includes(lower) || (lower.includes("engineering") && k.includes("engineering"))) {
+                    matchingCount += v;
+                  }
+                }
+                return {
+                  ...cat,
+                  count: `${matchingCount} Active Job${matchingCount === 1 ? "" : "s"}`,
+                };
+              })
+            );
+          }
+        }
+      } catch (err) {
+        console.warn("Could not fetch category counts:", err);
+      }
+    };
+    fetchCounts();
+  }, []);
 
   const handleSearchSubmit = (e: React.FormEvent) => {
     e.preventDefault();
+    if (onSearchJobs) {
+      onSearchJobs({
+        keyword: keyword.trim() || undefined,
+        location: location.trim() || undefined,
+        category: category !== "All Categories" ? category : undefined,
+      });
+    }
     onNavigate("find-jobs");
   };
 

@@ -25,16 +25,26 @@ export interface Job {
   verified?: boolean;
   location: string;
   employmentType: "Full Time" | "Part Time" | "Contract" | "Internship" | "Freelance" | "Small Task" | "Daily Wage" | "Skilled Trade" | "Trainee" | string;
-  workMode: "On-site" | "Remote" | "Hybrid";
+  workMode: "On-site" | "Remote" | "Hybrid" | string;
   experience: string;
   salaryMin: number;
   salaryMax: number;
   salaryText: string;
+  salaryCurrency?: string;
+  salaryPeriod?: string;
   postedTime: string;
   tags: string[];
   description: string;
+  responsibilities?: string[];
+  qualifications?: string[];
+  skills?: string[];
+  preferredSkills?: string[];
   requirements?: string[];
   benefits?: string[];
+  category?: string;
+  department?: string;
+  applicationDeadline?: string;
+  openingsCount?: number;
   isFeatured?: boolean;
   isNew?: boolean;
   isSaved?: boolean;
@@ -44,6 +54,10 @@ export interface Job {
   status?: "open" | "published" | "draft" | "closed" | "archived" | string;
   companyId?: string;
   employerId?: string;
+  publishedAt?: string;
+  closedAt?: string;
+  archivedAt?: string;
+  companyVerificationStatus?: string;
 }
 
 export interface Application {

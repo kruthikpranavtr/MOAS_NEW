@@ -307,6 +307,7 @@ export function requireRole(allowedRoles: string[]) {
         success: false,
         code: "FORBIDDEN",
         error: `Access denied. Action restricted to ${allowedRoles.join(" or ")} accounts.`,
+        message: `Access denied. Action restricted to ${allowedRoles.join(" or ")} accounts.`,
       });
     }
 

@@ -249,42 +249,64 @@ Only output the JSON.`;
 
   async generateJobDescription(params: {
     title?: string;
+    jobTitle?: string;
+    industry?: string;
     category?: string;
+    skills?: string[] | string;
     experience?: string;
+    location?: string;
+    employmentType?: string;
     workMode?: string;
     company?: string;
   }) {
     const ai = getAIClient();
-    const { title, category, experience, workMode, company } = params;
+    const title = params.title || params.jobTitle || "Software Engineer";
+    const category = params.industry || params.category || "Engineering";
+    const experience = params.experience || "1-3 years";
+    const workMode = params.workMode || "Hybrid";
+    const location = params.location || "Remote";
+    const employmentType = params.employmentType || "Full-time";
+    const company = params.company || "Hiring Company";
+    const inputSkills = Array.isArray(params.skills)
+      ? params.skills.join(", ")
+      : typeof params.skills === "string"
+        ? params.skills
+        : "";
 
     if (!ai) {
       return {
-        success: true,
-        source: "moas-template-engine",
-        summary: `We are seeking an innovative ${title || "Software Engineer"} to develop scalable solutions, optimize algorithmic pipelines, and deliver high-performance user experiences at ${company || "our company"}.`,
-        description: `### Role Overview\nAs a ${title || "Software Engineer"}, you will lead the design and implementation of robust features, collaborate with cross-functional product teams, and ensure adherence to best coding standards.\n\n### Key Responsibilities\n- Design, develop, and maintain clean, performant, and reliable web applications.\n- Collaborate closely with Product Managers, UX Designers, and Backend Architects.\n- Participate in code reviews, automated testing, and algorithmic performance profiling.\n- Mentor junior team members and champion developer productivity.\n\n### Qualifications\n- Bachelor's or Master's degree in Computer Science or equivalent practical experience.\n- Proven track record with modern tech stacks, distributed systems, and RESTful APIs.\n- Strong analytical mindset with passion for algorithmic problem solving.`,
-        suggestedSkills: ["React", "TypeScript", "Node.js", "System Design", "SQL", "Cloud Architecture"],
-        benefits: ["Comprehensive Health Insurance", "Flexible Hybrid Work Schedule", "Annual Learning & Conference Stipend", "Performance Bonus"],
+        success: false,
+        provider: "gemini",
+        error: "Gemini API key is not configured on the server. Please provide job details manually.",
       };
     }
 
     try {
-      const prompt = `You are MOAS (ML Opportunities and Algorithmic Services) Talent Engine.
-Generate a job description for:
-Title: ${title}
-Category: ${category}
-Experience: ${experience}
+      const prompt = `You are the MOAS AI Talent Engine.
+Generate an accurate, professional job specification for:
+Job Title: ${title}
+Industry/Category: ${category}
+Experience Level: ${experience}
+Employment Type: ${employmentType}
 Work Mode: ${workMode}
-Company: ${company || "Tech Innovators"}
+Location: ${location}
+Company: ${company}
+Key Skills Mentioned: ${inputSkills || "Not specified"}
+
+IMPORTANT RULES:
+- Do NOT fabricate salary, benefits, or company verification status.
+- Provide structured suggestions for an editable job posting.
 
 Return a JSON object with this exact structure:
 {
-  "summary": "A 1-2 sentence engaging overview of the role",
-  "description": "A markdown string with sections: ### Role Overview, ### Key Responsibilities, ### Qualifications",
-  "suggestedSkills": ["skill1", "skill2", "skill3", "skill4", "skill5"],
-  "benefits": ["benefit1", "benefit2", "benefit3", "benefit4"]
+  "summary": "1-2 sentence engaging role overview",
+  "description": "Comprehensive markdown role description",
+  "responsibilities": ["Responsibility 1", "Responsibility 2", "Responsibility 3", "Responsibility 4"],
+  "qualifications": ["Qualification 1", "Qualification 2", "Qualification 3", "Qualification 4"],
+  "requiredSkills": ["Skill 1", "Skill 2", "Skill 3", "Skill 4"],
+  "preferredSkills": ["Preferred Skill 1", "Preferred Skill 2"]
 }
-Only output the JSON.`;
+Output only the raw JSON.`;
 
       const response = await ai.models.generateContent({
         model: "gemini-3.8-flash",
@@ -297,18 +319,21 @@ Only output the JSON.`;
       const parsed = JSON.parse(response.text || "{}");
       return {
         success: true,
-        source: "gemini-3.8-flash",
-        ...parsed,
+        provider: "gemini-3.8-flash",
+        summary: parsed.summary || "",
+        description: parsed.description || "",
+        responsibilities: Array.isArray(parsed.responsibilities) ? parsed.responsibilities : [],
+        qualifications: Array.isArray(parsed.qualifications) ? parsed.qualifications : [],
+        requiredSkills: Array.isArray(parsed.requiredSkills) ? parsed.requiredSkills : [],
+        preferredSkills: Array.isArray(parsed.preferredSkills) ? parsed.preferredSkills : [],
+        suggestedSkills: Array.isArray(parsed.requiredSkills) ? parsed.requiredSkills : [],
       };
     } catch (error: any) {
       logger.error("Error generating job with Gemini:", error);
       return {
-        success: true,
-        source: "moas-resilience-engine",
-        summary: `Seeking a talented ${title || "Developer"} to build modern algorithmic systems and collaborative applications.`,
-        description: `### Role Overview\nJoin our engineering organization to build next-generation scalable platforms.\n\n### Key Responsibilities\n- Build high-scale reliable services\n- Partner with design and data science teams\n- Drive architectural initiatives`,
-        suggestedSkills: ["TypeScript", "React", "Python", "Cloud"],
-        benefits: ["Health Insurance", "Work Flexibility", "Stock Options"],
+        success: false,
+        provider: "gemini",
+        error: error.message || "Failed to generate job description with AI provider.",
       };
     }
   }

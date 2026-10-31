@@ -1,4 +1,5 @@
 import { applicationRepository } from "../repositories/ApplicationRepository.js";
+import { jobRepository } from "../repositories/JobRepository.js";
 import { ApplicationRecord } from "../models/types.js";
 import { auditLogger } from "../utils/auditLogger.js";
 
@@ -82,12 +83,30 @@ export class ApplicationService {
       throw new Error("jobId is required");
     }
 
+    // Verify job exists and is open for applications (Task 7 & Task 13)
+    const targetJob = await jobRepository.getById(data.jobId);
+    if (!targetJob) {
+      throw new Error(`Job with ID "${data.jobId}" not found.`);
+    }
+
+    const jobStatus = (targetJob.status || "open").toLowerCase();
+    if (jobStatus === "closed" || jobStatus === "archived" || jobStatus === "draft" || jobStatus === "suspended") {
+      throw new Error(`Cannot apply to a ${jobStatus} job.`);
+    }
+
+    if (targetJob.applicationDeadline) {
+      const deadline = new Date(targetJob.applicationDeadline);
+      if (!isNaN(deadline.getTime()) && deadline.getTime() < Date.now()) {
+        throw new Error("Cannot apply to an expired job listing. Application deadline has passed.");
+      }
+    }
+
     // Always enforce canonical initial status and candidate identity from server session
     const newApp: ApplicationRecord = {
       id: data.id || `app-${Date.now()}`,
       jobId: data.jobId,
-      jobTitle: data.jobTitle || "Software Engineer",
-      company: data.company || "Hiring Company",
+      jobTitle: targetJob.title || data.jobTitle || "Software Engineer",
+      company: targetJob.company || data.company || "Hiring Company",
       candidateId: candidateSession.userId,
       candidateName: data.candidateName || candidateSession.name || "Candidate",
       candidateEmail: data.candidateEmail || candidateSession.email || "candidate@email.com",

@@ -160,9 +160,9 @@ export class AuthService {
         }
 
         await client.query(
-          `INSERT INTO moas.company_members (id, company_id, user_id, role, status)
-           VALUES ($1, $2, $3, $4, 'accepted')
-           ON CONFLICT (company_id, user_id) DO NOTHING;`,
+          `INSERT INTO moas.company_members (id, company_id, user_id, role, status, is_verified)
+           VALUES ($1, $2, $3, $4, 'accepted', true)
+           ON CONFLICT (company_id, user_id) DO UPDATE SET is_verified = true;`,
           [`mem-${Date.now()}-${Math.floor(1000 + Math.random() * 9000)}`, compId, permanentId, isOwner ? "owner" : "member"]
         );
 

@@ -7,21 +7,69 @@ import { AuthenticatedRequest } from "../middleware/auth.js";
 import { sendSuccess, sendError } from "../utils/response.js";
 import { auditLogger } from "../utils/auditLogger.js";
 import { logger } from "../utils/logger.js";
+import { JobSearchParams } from "../models/types.js";
 
 export class JobController {
   async getAllJobs(req: Request, res: Response) {
     try {
-      const filters = {
-        category: req.query.category as string,
-        location: req.query.location as string,
+      const authReq = req as AuthenticatedRequest;
+      const callerRole = authReq.user ? (authReq.user.role || "").toLowerCase() : undefined;
+      const callerUserId = authReq.user ? authReq.user.userId : undefined;
+
+      let skills: string[] | undefined = undefined;
+      if (typeof req.query.skills === "string") {
+        skills = req.query.skills.split(",").map((s) => s.trim()).filter(Boolean);
+      } else if (Array.isArray(req.query.skills)) {
+        skills = req.query.skills.map((s) => String(s).trim()).filter(Boolean);
+      }
+
+      const params: JobSearchParams = {
         search: req.query.search as string,
+        category: (req.query.category || req.query.department) as string,
+        department: req.query.department as string,
+        location: req.query.location as string,
+        workMode: req.query.workMode as string,
+        employmentType: (req.query.employmentType || req.query.type) as string,
+        type: req.query.type as string,
+        experience: req.query.experience as string,
+        salaryMin: req.query.salaryMin ? Number(req.query.salaryMin) : undefined,
+        salaryMax: req.query.salaryMax ? Number(req.query.salaryMax) : undefined,
+        skills,
+        isVerified: req.query.isVerified === "true" || req.query.verifiedOnly === "true" ? true : undefined,
+        status: req.query.status as string,
         employerId: req.query.employerId as string,
+        companyId: req.query.companyId as string,
+        isFeatured: req.query.isFeatured === "true" ? true : req.query.isFeatured === "false" ? false : undefined,
+        datePosted: req.query.datePosted as string,
+        sortBy: req.query.sortBy as string,
+        page: req.query.page ? parseInt(String(req.query.page), 10) : 1,
+        limit: req.query.limit ? parseInt(String(req.query.limit), 10) : 10,
+        callerRole,
+        callerUserId,
       };
-      const jobs = await jobService.getAllJobs(filters);
-      return sendSuccess(res, { count: jobs.length, jobs });
+
+      const result = await jobService.searchJobs(params);
+      return sendSuccess(res, {
+        count: result.total,
+        total: result.total,
+        page: result.page,
+        limit: result.limit,
+        totalPages: result.totalPages,
+        jobs: result.jobs,
+      });
     } catch (error: any) {
       logger.error("[Job] getAllJobs error:", error);
       return sendError(res, error.message || "Failed to fetch jobs", 500);
+    }
+  }
+
+  async getCategoryCounts(req: Request, res: Response) {
+    try {
+      const counts = await jobService.getCategoryCounts();
+      return sendSuccess(res, { categories: counts });
+    } catch (error: any) {
+      logger.error("[Job] getCategoryCounts error:", error);
+      return sendError(res, error.message || "Failed to fetch category counts", 500);
     }
   }
 
@@ -48,7 +96,7 @@ export class JobController {
       const callerId = req.user.userId;
       const callerRole = (req.user.role || "").toLowerCase();
 
-      // Candidates strictly forbidden from posting jobs
+      // Candidates strictly forbidden from posting jobs (Task 2 & 13)
       if (callerRole === "candidate" || callerRole === "jobseeker") {
         return sendError(res, "Forbidden: Action restricted to Employer or Admin accounts.", 403);
       }
@@ -60,7 +108,9 @@ export class JobController {
         const userMemberships = await companyMemberRepository.getUserCompanies(callerId);
 
         if (targetCompanyId) {
-          const isMember = userMemberships.some((m) => m.companyId === targetCompanyId && m.isVerified);
+          const isMember = userMemberships.some(
+            (m) => m.companyId === targetCompanyId && (m.isVerified || m.role === "owner" || m.role === "admin")
+          );
           if (!isMember) {
             return sendError(res, "Forbidden: You are not authorized to post jobs on behalf of this company.", 403);
           }
@@ -69,7 +119,9 @@ export class JobController {
         } else if (targetCompanyName) {
           const existingComp = await companyRepository.getByName(targetCompanyName);
           if (existingComp) {
-            const isMember = userMemberships.some((m) => m.companyId === existingComp.id && m.isVerified);
+            const isMember = userMemberships.some(
+              (m) => m.companyId === existingComp.id && (m.isVerified || m.role === "owner" || m.role === "admin")
+            );
             if (!isMember && userMemberships.length > 0) {
               return sendError(res, "Forbidden: You are not authorized to post jobs on behalf of this company.", 403);
             }
@@ -106,11 +158,12 @@ export class JobController {
           } else {
             const user = await userRepository.getByIdOrEmail(callerId);
             if (user?.companyName) {
-              const comp = await companyRepository.getByName(user.companyName) || await companyRepository.create({
-                name: user.companyName,
-                ownerUserId: callerId,
-                verified: false,
-              });
+              const comp = (await companyRepository.getByName(user.companyName)) ||
+                (await companyRepository.create({
+                  name: user.companyName,
+                  ownerUserId: callerId,
+                  verified: false,
+                }));
               targetCompanyId = comp.id;
               targetCompanyName = comp.name;
               await companyMemberRepository.addMember({
@@ -124,11 +177,26 @@ export class JobController {
         }
       }
 
+      // Format arrays if received as strings
+      const toArray = (val: any) => {
+        if (Array.isArray(val)) return val;
+        if (typeof val === "string") {
+          return val.split(",").map((s) => s.trim()).filter(Boolean);
+        }
+        return [];
+      };
+
       const jobData = {
         ...req.body,
         company: targetCompanyName || req.body.company,
         companyId: targetCompanyId,
         employerId: callerId, // Verified from server session
+        responsibilities: toArray(req.body.responsibilities),
+        qualifications: toArray(req.body.qualifications),
+        skills: toArray(req.body.skills || req.body.tags),
+        preferredSkills: toArray(req.body.preferredSkills),
+        benefits: toArray(req.body.benefits),
+        tags: toArray(req.body.tags || req.body.skills),
       };
 
       const created = await jobService.createJob(jobData);
@@ -138,7 +206,7 @@ export class JobController {
         action: "JOB_POSTED",
         resourceType: "job",
         resourceId: created.id,
-        details: { title: created.title, company: created.company, companyId: created.companyId },
+        details: { title: created.title, company: created.company, companyId: created.companyId, status: created.status },
         outcome: "SUCCESS",
       });
 
@@ -197,7 +265,38 @@ export class JobController {
       return sendSuccess(res, { job: updated, message: "Job updated successfully." });
     } catch (error: any) {
       logger.error("[Job] updateJob error:", error);
-      return sendError(res, error.message || "Failed to update job", 500);
+      const statusCode = error.message.includes("Forbidden") ? 403 : 400;
+      return sendError(res, error.message || "Failed to update job", statusCode);
+    }
+  }
+
+  async updateJobStatus(req: AuthenticatedRequest, res: Response) {
+    try {
+      if (!req.user) {
+        return sendError(res, "Authentication required to update job status.", 401);
+      }
+
+      const { id } = req.params;
+      const { status } = req.body;
+      if (!status) {
+        return sendError(res, "status is required", 400);
+      }
+
+      const updated = await jobService.updateJobStatus(id, status, {
+        userId: req.user.userId,
+        role: req.user.role,
+        email: req.user.email,
+      });
+
+      if (!updated) {
+        return sendError(res, `Job with ID "${id}" not found`, 404);
+      }
+
+      return sendSuccess(res, { job: updated, message: `Job status updated to ${status}.` });
+    } catch (error: any) {
+      logger.error("[Job] updateJobStatus error:", error);
+      const statusCode = error.message.includes("Forbidden") ? 403 : 400;
+      return sendError(res, error.message || "Failed to update job status", statusCode);
     }
   }
 
@@ -245,7 +344,8 @@ export class JobController {
       return sendSuccess(res, { deleted, message: "Job deleted successfully." });
     } catch (error: any) {
       logger.error("[Job] deleteJob error:", error);
-      return sendError(res, error.message || "Failed to delete job", 500);
+      const statusCode = error.message.includes("Forbidden") ? 403 : 500;
+      return sendError(res, error.message || "Failed to delete job", statusCode);
     }
   }
 }

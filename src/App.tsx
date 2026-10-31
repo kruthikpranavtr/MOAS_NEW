@@ -451,6 +451,7 @@ export default function App() {
   const [selectedJob, setSelectedJob] = useState<Job | null>(null);
   const [isAlertModalOpen, setIsAlertModalOpen] = useState(false);
   const [isBotTyping, setIsBotTyping] = useState(false);
+  const [jobSearchParams, setJobSearchParams] = useState<{ keyword?: string; location?: string; category?: string }>({});
 
   // Protected navigation handler with basic role-based route guarding
   const handleNavigate = (nav: NavigationState) => {
@@ -724,10 +725,10 @@ export default function App() {
     );
 
     // Persist saved job to database
-    authFetch("/api/saved-jobs", {
+    authFetch("/api/v1/jobs/saved", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ userId: user.id, jobId }),
+      body: JSON.stringify({ jobId }),
     }).catch((e) => console.warn("[MOAS Save Job Sync]", e?.message || e));
   };
 
@@ -1302,6 +1303,7 @@ export default function App() {
                         onNavigate={handleNavigate}
                         onSelectJob={(j) => setSelectedJob(j)}
                         onToggleSaveJob={handleToggleSaveJob}
+                        onSearchJobs={(params) => setJobSearchParams(params)}
                       />
                     )}
 
@@ -1344,6 +1346,9 @@ export default function App() {
                       <FindJobsView
                         jobs={jobs}
                         companies={companies}
+                        initialKeyword={jobSearchParams.keyword}
+                        initialLocation={jobSearchParams.location}
+                        initialCategory={jobSearchParams.category}
                         onSelectJob={(j) => setSelectedJob(j)}
                         onToggleSaveJob={handleToggleSaveJob}
                         onRateCompany={handleOpenRateModal}
@@ -1460,6 +1465,10 @@ export default function App() {
           onOpenDirectChat={() => {
             setSelectedJob(null);
             handleNavigate("messages");
+          }}
+          onViewCompany={() => {
+            setSelectedJob(null);
+            handleNavigate("top-companies");
           }}
         />
       )}

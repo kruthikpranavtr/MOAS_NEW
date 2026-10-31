@@ -127,25 +127,77 @@ export interface JobRecord {
   company: string;
   location: string;
   type: string;
+  employmentType?: string;
   experience: string;
   salary: string;
   salaryText?: string;
+  salaryCurrency?: string;
+  salaryPeriod?: string;
   description: string;
+  responsibilities?: string[];
+  qualifications?: string[];
+  skills?: string[];
+  preferredSkills?: string[];
   requirements: string[];
   department: string;
+  category?: string;
   tags: string[];
   isVerified: boolean;
+  companyVerified?: boolean;
+  companyVerificationStatus?: string;
   postedDate: string;
-  status?: "open" | "published" | "draft" | "closed" | "archived" | string;
+  status?: "open" | "published" | "draft" | "closed" | "archived" | "suspended" | string;
   workMode?: string;
   logoUrl?: string;
   logo?: string;
   applicantCount?: number;
+  openingsCount?: number;
+  benefits?: string[];
   salaryMin?: number;
   salaryMax?: number;
   isFeatured?: boolean;
   employerId?: string;
   companyId?: string;
+  applicationDeadline?: string;
+  publishedAt?: string;
+  closedAt?: string;
+  archivedAt?: string;
+  createdAt?: string;
+  updatedAt?: string;
+}
+
+export interface JobSearchParams {
+  search?: string;
+  category?: string;
+  department?: string;
+  location?: string;
+  workMode?: string;
+  employmentType?: string;
+  type?: string;
+  experience?: string;
+  salaryMin?: number;
+  salaryMax?: number;
+  skills?: string[];
+  isVerified?: boolean;
+  verifiedOnly?: boolean;
+  status?: string;
+  employerId?: string;
+  companyId?: string;
+  isFeatured?: boolean;
+  datePosted?: string;
+  sortBy?: "relevance" | "newest" | "oldest" | "salary_high" | "salary_low" | "company_asc" | string;
+  page?: number;
+  limit?: number;
+  callerRole?: string;
+  callerUserId?: string;
+}
+
+export interface JobSearchResult {
+  jobs: JobRecord[];
+  total: number;
+  page: number;
+  limit: number;
+  totalPages: number;
 }
 
 export interface ApplicationRecord {
@@ -232,6 +284,7 @@ export interface SavedJobRecord {
   jobId: string;
   savedDate?: string;
   savedAt?: string;
+  job?: JobRecord;
 }
 
 export interface JobAlertRecord {

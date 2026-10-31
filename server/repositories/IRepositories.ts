@@ -1,5 +1,7 @@
 import {
   JobRecord,
+  JobSearchParams,
+  JobSearchResult,
   ApplicationRecord,
   UserRecord,
   CompanyRecord,
@@ -12,9 +14,14 @@ import {
 } from "../models/types.js";
 
 export interface IJobRepository {
-  getAll(search?: string, department?: string, location?: string): Promise<JobRecord[]>;
+  getAll(search?: string, department?: string, location?: string, status?: string): Promise<JobRecord[]>;
+  searchJobs(params: JobSearchParams): Promise<JobSearchResult>;
   getById(id: string): Promise<JobRecord | null>;
+  getByEmployer(employerId: string, status?: string, search?: string): Promise<JobRecord[]>;
+  getByCompany(companyId: string, status?: string): Promise<JobRecord[]>;
+  getCategoryCounts(): Promise<Array<{ category: string; count: number }>>;
   save(job: JobRecord): Promise<JobRecord>;
+  updateStatus(id: string, status: string): Promise<JobRecord | null>;
   delete(id: string): Promise<boolean>;
 }
 
@@ -49,7 +56,9 @@ export interface ICompanyRepository {
 
 export interface ISavedJobRepository {
   getByUser(userId: string): Promise<SavedJobRecord[]>;
+  getByUserWithJobs(userId: string): Promise<SavedJobRecord[]>;
   toggle(userId: string, jobId: string): Promise<{ saved: boolean; count?: number }>;
+  delete(userId: string, jobId: string): Promise<boolean>;
 }
 
 export interface IJobAlertRepository {

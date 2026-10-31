@@ -15,11 +15,28 @@ export class AIController {
 
   async generateJob(req: Request, res: Response) {
     try {
+      const { title, jobTitle } = req.body || {};
+      if (!title && !jobTitle) {
+        return res.status(400).json({
+          success: false,
+          error: "jobTitle is required for AI job description generation.",
+          message: "jobTitle is required for AI job description generation.",
+        });
+      }
+
       const result = await aiService.generateJobDescription(req.body);
+      if (result && (result as any).success === false) {
+        return res.status(503).json(result);
+      }
       return res.json(result);
     } catch (error: any) {
       logger.error("[AI] Error generating job:", error);
-      return res.status(500).json({ success: false, error: error.message });
+      const status = error.message?.includes("unavailable") || error.message?.includes("Gemini") ? 503 : 500;
+      return res.status(status).json({
+        success: false,
+        error: error.message || "Failed to generate job description",
+        message: error.message || "Failed to generate job description",
+      });
     }
   }
 

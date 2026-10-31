@@ -36,7 +36,14 @@ export class SavedJobController {
       }
 
       const callerId = req.user.userId;
-      const { jobId } = req.body;
+      const callerRole = (req.user.role || "").toLowerCase();
+
+      // Only candidate or admin accounts can bookmark jobs
+      if (callerRole === "employer") {
+        return sendError(res, "Forbidden: Only job seekers can save job listings.", 403);
+      }
+
+      const jobId = req.body.jobId || req.params.jobId || req.params.id;
       if (!jobId) {
         return sendError(res, "jobId is required", 400);
       }
@@ -45,7 +52,28 @@ export class SavedJobController {
       return sendSuccess(res, result);
     } catch (error: any) {
       logger.error("[SavedJob] toggleSavedJob error:", error);
-      return sendError(res, error.message || "Failed to toggle saved job", 500);
+      const status = error.message.includes("not found") ? 404 : 500;
+      return sendError(res, error.message || "Failed to toggle saved job", status);
+    }
+  }
+
+  async removeSavedJob(req: AuthenticatedRequest, res: Response) {
+    try {
+      if (!req.user) {
+        return sendError(res, "Authentication required to remove saved jobs.", 401);
+      }
+
+      const callerId = req.user.userId;
+      const jobId = req.params.jobId || req.params.id;
+      if (!jobId) {
+        return sendError(res, "jobId is required", 400);
+      }
+
+      const removed = await savedJobService.removeSavedJob(callerId, jobId);
+      return sendSuccess(res, { removed, message: "Job removed from saved listings." });
+    } catch (error: any) {
+      logger.error("[SavedJob] removeSavedJob error:", error);
+      return sendError(res, error.message || "Failed to remove saved job", 500);
     }
   }
 }

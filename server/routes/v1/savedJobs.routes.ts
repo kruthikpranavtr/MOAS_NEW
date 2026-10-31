@@ -9,5 +9,8 @@ router.get("/", requireAuth, (req, res) => savedJobController.getSavedJobs(req, 
 router.post("/", requireAuth, validateBody(["jobId"]), (req, res) =>
   savedJobController.toggleSavedJob(req, res)
 );
+router.delete("/:id", requireAuth, (req, res) =>
+  savedJobController.removeSavedJob(req, res)
+);
 
 export default router;
