@@ -28,8 +28,15 @@ export interface IJobRepository {
 export interface IApplicationRepository {
   getAll(candidateId?: string): Promise<ApplicationRecord[]>;
   getById(id: string): Promise<ApplicationRecord | null>;
+  getActiveApplication(candidateId: string, jobId: string): Promise<ApplicationRecord | null>;
+  getForEmployer(employerUserId: string, jobId?: string, status?: string, search?: string): Promise<ApplicationRecord[]>;
+  isApplicantForEmployer(applicationId: string, employerUserId: string): Promise<boolean>;
+  isCandidateApplicantForEmployer(candidateUserId: string, employerUserId: string): Promise<boolean>;
   create(app: ApplicationRecord): Promise<ApplicationRecord>;
-  updateStatus(id: string, status: ApplicationRecord["status"], stage?: string): Promise<ApplicationRecord | null>;
+  updateStatus(id: string, status: ApplicationRecord["status"], stage?: string, reason?: string): Promise<ApplicationRecord | null>;
+  withdraw(id: string, reason?: string): Promise<ApplicationRecord | null>;
+  getHistory(applicationId: string): Promise<import("../models/types.js").ApplicationHistoryRecord[]>;
+  addHistory(history: Omit<import("../models/types.js").ApplicationHistoryRecord, "id" | "createdAt">): Promise<import("../models/types.js").ApplicationHistoryRecord>;
   delete(id: string): Promise<boolean>;
 }
 
@@ -63,8 +70,35 @@ export interface ISavedJobRepository {
 
 export interface IJobAlertRepository {
   getByUser(userId: string): Promise<JobAlertRecord[]>;
+  getById(id: string): Promise<JobAlertRecord | null>;
+  getAllActive(): Promise<JobAlertRecord[]>;
   save(alert: JobAlertRecord): Promise<JobAlertRecord>;
+  update(id: string, updates: Partial<JobAlertRecord>): Promise<JobAlertRecord | null>;
   delete(id: string): Promise<boolean>;
+  recordDelivery(alertId: string, userId: string, jobId: string, channel?: string): Promise<import("../models/types.js").JobAlertDeliveryRecord>;
+  hasDelivered(alertId: string, jobId: string): Promise<boolean>;
+}
+
+export interface INotificationRepository {
+  getByUser(userId: string, options?: { unreadOnly?: boolean; limit?: number; offset?: number }): Promise<{ notifications: import("../models/types.js").NotificationRecord[]; total: number; unreadCount: number }>;
+  getUnreadCount(userId: string): Promise<number>;
+  create(notif: Partial<import("../models/types.js").NotificationRecord> & { userId: string; title: string; message: string }): Promise<import("../models/types.js").NotificationRecord>;
+  markAsRead(id: string, userId: string): Promise<boolean>;
+  markAllAsRead(userId: string): Promise<number>;
+  archive(id: string, userId: string): Promise<boolean>;
+  delete(id: string, userId: string): Promise<boolean>;
+  clearAll(userId: string): Promise<number>;
+}
+
+export interface IMessagingRepository {
+  getConversations(userId: string): Promise<import("../models/types.js").ConversationRecord[]>;
+  getConversationById(id: string): Promise<import("../models/types.js").ConversationRecord | null>;
+  findConversation(candidateId: string, employerId: string, jobId?: string): Promise<import("../models/types.js").ConversationRecord | null>;
+  createConversation(data: Partial<import("../models/types.js").ConversationRecord> & { participantIds: string[] }): Promise<import("../models/types.js").ConversationRecord>;
+  getMessages(conversationId: string, limit?: number, beforeTimestamp?: string): Promise<import("../models/types.js").MessageRecord[]>;
+  saveMessage(message: Partial<import("../models/types.js").MessageRecord> & { conversationId: string; senderId: string; content: string }): Promise<import("../models/types.js").MessageRecord>;
+  markMessagesAsRead(conversationId: string, recipientId: string): Promise<number>;
+  getUnreadCount(userId: string): Promise<number>;
 }
 
 export interface IProfileViewRepository {

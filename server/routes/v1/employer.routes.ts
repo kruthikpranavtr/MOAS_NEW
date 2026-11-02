@@ -40,5 +40,8 @@ router.put("/applications/:id/notes", (req, res) =>
 router.post("/applications/:id/schedule-interview", (req, res) =>
   employerController.scheduleInterview(req, res)
 );
+router.get("/applications/:id/resume", (req, res) =>
+  employerController.getApplicantResume(req, res)
+);
 
 export default router;

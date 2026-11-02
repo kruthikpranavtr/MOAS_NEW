@@ -8,6 +8,7 @@ export interface ResumeItem {
   type: "DOCX" | "PDF";
   isPrimary: boolean;
   dataUrl?: string;
+  fileUrl?: string;
   storageKey?: string;
   userId?: string;
   originalFilename?: string;
@@ -200,6 +201,18 @@ export interface JobSearchResult {
   totalPages: number;
 }
 
+export interface ApplicationHistoryRecord {
+  id: string;
+  applicationId: string;
+  previousStatus?: string;
+  newStatus: string;
+  stage?: string;
+  actorId: string;
+  actorRole: string;
+  reason?: string;
+  createdAt: string;
+}
+
 export interface ApplicationRecord {
   id: string;
   jobId: string;
@@ -209,13 +222,21 @@ export interface ApplicationRecord {
   candidateName: string;
   candidateEmail: string;
   appliedDate: string;
-  status: "Applied" | "Under Review" | "Shortlisted" | "Interview Scheduled" | "Interview" | "Offered" | "Hired" | "Rejected" | string;
+  status: "Applied" | "Under Review" | "Shortlisted" | "Interview Scheduled" | "Interview" | "Offered" | "Hired" | "Rejected" | "Withdrawn" | string;
   stage?: string;
   matchScore?: number;
+  resumeId?: string;
   resumeName?: string;
+  resumeUrl?: string;
+  coverLetter?: string;
   notes?: string;
   recruiterNotes?: string;
   interviewScheduledAt?: string;
+  withdrawnAt?: string;
+  rejectionReason?: string;
+  history?: ApplicationHistoryRecord[];
+  createdAt?: string;
+  updatedAt?: string;
 }
 
 export interface CompanyRecord {
@@ -295,10 +316,75 @@ export interface JobAlertRecord {
   keyword?: string;
   location?: string;
   role?: string;
-  frequency?: "Daily" | "Weekly" | "Instant" | "daily" | "weekly";
+  category?: string;
+  workMode?: string;
+  minSalary?: number;
+  experience?: string;
+  skills?: string[];
+  frequency?: "Daily" | "Weekly" | "Instant" | "daily" | "weekly" | string;
   channel?: string;
   active: boolean;
+  lastProcessedAt?: string;
   createdAt: string;
+  updatedAt?: string;
+}
+
+export interface JobAlertDeliveryRecord {
+  id: string;
+  alertId: string;
+  userId: string;
+  jobId: string;
+  deliveredAt: string;
+  channel: string;
+}
+
+export interface NotificationRecord {
+  id: string;
+  userId: string;
+  type: "job" | "application" | "interview" | "offer" | "message" | "system" | string;
+  title: string;
+  message: string;
+  link?: string;
+  metadata?: Record<string, any>;
+  channel?: string;
+  deliveryStatus?: string;
+  isRead: boolean;
+  readAt?: string;
+  archived?: boolean;
+  createdAt: string;
+}
+
+export interface MessageRecord {
+  id: string;
+  conversationId: string;
+  senderId: string;
+  recipientId?: string;
+  senderRole?: string;
+  content: string;
+  isRead: boolean;
+  readAt?: string;
+  deliveryStatus?: string;
+  createdAt: string;
+}
+
+export interface ConversationRecord {
+  id: string;
+  jobId?: string;
+  applicationId?: string;
+  employerId?: string;
+  candidateId?: string;
+  participantIds?: string[];
+  companyName?: string;
+  companyLogo?: string;
+  candidateName?: string;
+  candidateAvatar?: string;
+  title?: string;
+  lastMessageText?: string;
+  lastMessageTime?: string;
+  unreadCount?: number;
+  messages?: MessageRecord[];
+  createdAt: string;
+  updatedAt: string;
 }
 
 export interface ProfileViewRecord {

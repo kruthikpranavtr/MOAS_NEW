@@ -18,8 +18,10 @@ export class ApplicationController {
 
       const candidateId = (req.query.userId || req.query.candidateId) as string;
       const jobId = req.query.jobId as string;
+      const status = req.query.status as string;
+      const search = req.query.search as string;
 
-      const apps = await applicationService.getApplications(caller, candidateId, jobId);
+      const apps = await applicationService.getApplications(caller, candidateId, jobId, status, search);
       return sendSuccess(res, { count: apps.length, applications: apps });
     } catch (error: any) {
       logger.error("[Application] getApplications error:", error);
@@ -53,6 +55,27 @@ export class ApplicationController {
     }
   }
 
+  async getApplicationHistory(req: AuthenticatedRequest, res: Response) {
+    try {
+      if (!req.user) {
+        return sendError(res, "Authentication required to view application history", 401);
+      }
+
+      const { id } = req.params;
+      const caller = {
+        userId: req.user.userId,
+        role: req.user.role,
+      };
+
+      const history = await applicationService.getApplicationHistory(id, caller);
+      return sendSuccess(res, { count: history.length, history });
+    } catch (error: any) {
+      logger.error("[Application] getApplicationHistory error:", error);
+      const statusCode = error.message.includes("Forbidden") ? 403 : 500;
+      return sendError(res, error.message || "Failed to fetch application history", statusCode);
+    }
+  }
+
   async submitApplication(req: AuthenticatedRequest, res: Response) {
     try {
       if (!req.user) {
@@ -70,9 +93,10 @@ export class ApplicationController {
       return sendSuccess(res, { application: result, message: "Application submitted successfully." }, 201);
     } catch (error: any) {
       logger.error("[Application] submitApplication error:", error);
+      const isConflict = error.message.includes("Conflict") || error.message.includes("already submitted") || error.message.includes("already applied");
       const statusCode = error.message.includes("Forbidden")
         ? 403
-        : error.message.includes("already applied")
+        : isConflict
         ? 409
         : 400;
       return sendError(res, error.message || "Failed to submit application", statusCode);
@@ -86,7 +110,7 @@ export class ApplicationController {
       }
 
       const { id } = req.params;
-      const { status, stage } = req.body;
+      const { status, stage, reason } = req.body;
       if (!status) {
         return sendError(res, "Status is required", 400);
       }
@@ -97,7 +121,7 @@ export class ApplicationController {
         email: req.user.email,
       };
 
-      const updated = await applicationService.updateStatus(id, status, stage, caller);
+      const updated = await applicationService.updateStatus(id, status, stage, caller, reason);
       if (!updated) {
         return sendError(res, `Application with ID "${id}" not found`, 404);
       }
@@ -111,6 +135,29 @@ export class ApplicationController {
         ? 400
         : 500;
       return sendError(res, error.message || "Failed to update status", statusCode);
+    }
+  }
+
+  async withdrawApplication(req: AuthenticatedRequest, res: Response) {
+    try {
+      if (!req.user) {
+        return sendError(res, "Authentication required to withdraw application", 401);
+      }
+
+      const { id } = req.params;
+      const caller = {
+        userId: req.user.userId,
+        role: req.user.role,
+        email: req.user.email,
+      };
+
+      const reason = req.body?.reason;
+      const updated = await applicationService.withdrawApplication(id, caller, reason);
+      return sendSuccess(res, { application: updated, message: "Application withdrawn successfully." });
+    } catch (error: any) {
+      logger.error("[Application] withdrawApplication error:", error);
+      const statusCode = error.message.includes("Forbidden") ? 403 : 400;
+      return sendError(res, error.message || "Failed to withdraw application", statusCode);
     }
   }
 

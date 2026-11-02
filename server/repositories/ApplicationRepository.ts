@@ -15,12 +15,39 @@ function mapRowToApplication(row: any): ApplicationRecord {
     status: row.status || "Applied",
     stage: row.stage || "Initial Screening",
     matchScore: row.match_score ?? 85,
+    resumeId: row.resume_id || undefined,
     resumeName: row.resume_name || "Resume.pdf",
+    resumeUrl: row.resume_url || undefined,
+    coverLetter: row.cover_letter || undefined,
     notes: row.notes || undefined,
     recruiterNotes: row.recruiter_notes || row.notes || undefined,
     interviewScheduledAt: row.interview_scheduled_at
       ? new Date(row.interview_scheduled_at).toISOString()
       : undefined,
+    withdrawnAt: row.withdrawn_at
+      ? new Date(row.withdrawn_at).toISOString()
+      : undefined,
+    rejectionReason: row.rejection_reason || undefined,
+    createdAt: row.created_at
+      ? new Date(row.created_at).toISOString()
+      : undefined,
+    updatedAt: row.updated_at
+      ? new Date(row.updated_at).toISOString()
+      : undefined,
+  };
+}
+
+function mapRowToHistory(row: any): import("../models/types.js").ApplicationHistoryRecord {
+  return {
+    id: row.id,
+    applicationId: row.application_id,
+    previousStatus: row.previous_status || undefined,
+    newStatus: row.new_status,
+    stage: row.stage || undefined,
+    actorId: row.actor_id,
+    actorRole: row.actor_role,
+    reason: row.reason || undefined,
+    createdAt: row.created_at ? new Date(row.created_at).toISOString() : new Date().toISOString(),
   };
 }
 
@@ -37,6 +64,18 @@ export class ApplicationRepository implements IApplicationRepository {
     sql += " ORDER BY created_at DESC;";
     const res = await query(sql, params);
     return res.rows.map(mapRowToApplication);
+  }
+
+  async getActiveApplication(candidateId: string, jobId: string): Promise<ApplicationRecord | null> {
+    const res = await query(
+      `SELECT * FROM moas.applications 
+       WHERE candidate_id = $1 AND job_id = $2 
+         AND status NOT IN ('Withdrawn', 'withdrawn', 'Rejected', 'rejected')
+       LIMIT 1;`,
+      [candidateId, jobId]
+    );
+    if (res.rows.length === 0) return null;
+    return mapRowToApplication(res.rows[0]);
   }
 
   async getForEmployer(
@@ -136,11 +175,16 @@ export class ApplicationRepository implements IApplicationRepository {
       const res = await client.query(
         `INSERT INTO moas.applications (
           id, job_id, job_title, company, candidate_id, candidate_name, candidate_email,
-          applied_date, status, stage, match_score, resume_name, notes, recruiter_notes, interview_scheduled_at
-        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)
+          applied_date, status, stage, match_score, resume_id, resume_name, resume_url, cover_letter,
+          notes, recruiter_notes, interview_scheduled_at
+        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18)
         ON CONFLICT (id) DO UPDATE SET
           status = EXCLUDED.status,
           stage = EXCLUDED.stage,
+          resume_id = EXCLUDED.resume_id,
+          resume_name = EXCLUDED.resume_name,
+          resume_url = EXCLUDED.resume_url,
+          cover_letter = EXCLUDED.cover_letter,
           notes = EXCLUDED.notes,
           recruiter_notes = COALESCE(EXCLUDED.recruiter_notes, applications.recruiter_notes),
           interview_scheduled_at = COALESCE(EXCLUDED.interview_scheduled_at, applications.interview_scheduled_at),
@@ -158,7 +202,10 @@ export class ApplicationRepository implements IApplicationRepository {
           app.status || "Applied",
           app.stage || "Initial Screening",
           app.matchScore ?? 85,
+          app.resumeId || null,
           app.resumeName || null,
+          app.resumeUrl || null,
+          app.coverLetter || null,
           app.notes || null,
           app.recruiterNotes || app.notes || null,
           app.interviewScheduledAt || null,
@@ -178,18 +225,71 @@ export class ApplicationRepository implements IApplicationRepository {
   async updateStatus(
     id: string,
     status: ApplicationRecord["status"],
-    stage?: string
+    stage?: string,
+    reason?: string
   ): Promise<ApplicationRecord | null> {
     const res = await query(
       `UPDATE moas.applications
-      SET status = $2, stage = COALESCE($3, stage), updated_at = NOW()
+      SET status = $2::text, 
+          stage = COALESCE($3::text, stage), 
+          rejection_reason = CASE WHEN $2::text = 'Rejected' OR $2::text = 'rejected' THEN COALESCE($4::text, rejection_reason) ELSE rejection_reason END,
+          updated_at = NOW()
       WHERE id = $1
       RETURNING *;`,
-      [id, status, stage || null]
+      [id, status, stage || null, reason || null]
     );
 
     if (res.rows.length === 0) return null;
     return mapRowToApplication(res.rows[0]);
+  }
+
+  async withdraw(id: string, reason?: string): Promise<ApplicationRecord | null> {
+    const res = await query(
+      `UPDATE moas.applications
+       SET status = 'Withdrawn',
+           stage = 'Withdrawn',
+           withdrawn_at = NOW(),
+           rejection_reason = COALESCE($2, rejection_reason),
+           updated_at = NOW()
+       WHERE id = $1
+       RETURNING *;`,
+      [id, reason || "Withdrawn by candidate"]
+    );
+    if (res.rows.length === 0) return null;
+    return mapRowToApplication(res.rows[0]);
+  }
+
+  async getHistory(applicationId: string): Promise<import("../models/types.js").ApplicationHistoryRecord[]> {
+    const res = await query(
+      `SELECT * FROM moas.application_history 
+       WHERE application_id = $1 
+       ORDER BY created_at ASC;`,
+      [applicationId]
+    );
+    return res.rows.map(mapRowToHistory);
+  }
+
+  async addHistory(
+    history: Omit<import("../models/types.js").ApplicationHistoryRecord, "id" | "createdAt">
+  ): Promise<import("../models/types.js").ApplicationHistoryRecord> {
+    const id = `hist-${Date.now()}-${Math.random().toString(36).substr(2, 6)}`;
+    const res = await query(
+      `INSERT INTO moas.application_history (
+        id, application_id, previous_status, new_status, stage, actor_id, actor_role, reason, created_at
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, NOW())
+      RETURNING *;`,
+      [
+        id,
+        history.applicationId,
+        history.previousStatus || null,
+        history.newStatus,
+        history.stage || null,
+        history.actorId,
+        history.actorRole,
+        history.reason || null,
+      ]
+    );
+    return mapRowToHistory(res.rows[0]);
   }
 
   async updateRecruiterNotes(id: string, notes: string): Promise<ApplicationRecord | null> {

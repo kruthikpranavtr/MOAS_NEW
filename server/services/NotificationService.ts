@@ -1,67 +1,94 @@
-/**
- * Notification Service
- *
- * MODULE STATUS:
- * [PLANNED & SCAFFOLDED]
- * Currently, the React frontend renders system and job alert notifications in local application state.
- * This service implements the modular backend foundation for multi-user notifications, persistence,
- * and delivery. Full push notification gateways (WebPush / FCM / Email digest) are scheduled for Phase 4.
- */
+import { notificationRepository } from "../repositories/NotificationRepository.js";
+import { NotificationRecord } from "../models/types.js";
+import { realtimeBus } from "../realtime/eventBus.js";
+import { logger } from "../utils/logger.js";
 
-export interface ServerNotification {
-  id: string;
-  userId: string;
+export interface CreateNotificationInput {
   title: string;
-  description: string;
-  time: string;
-  type: "job" | "application" | "system";
+  message?: string;
+  description?: string;
+  type?: string;
   company?: string;
-  read?: boolean;
+  metadata?: Record<string, any>;
+  channel?: "in_app" | "email" | "sms";
 }
 
 export class NotificationService {
-  private notifications: Map<string, ServerNotification[]> = new Map();
+  async getUserNotifications(
+    userId: string,
+    limit: number = 50,
+    offset: number = 0,
+    unreadOnly: boolean = false
+  ): Promise<{ notifications: NotificationRecord[]; unreadCount: number; total: number }> {
+    if (!userId) return { notifications: [], unreadCount: 0, total: 0 };
+    const { notifications, unreadCount, total } = await notificationRepository.getByUser(userId, {
+      limit,
+      offset,
+      unreadOnly,
+    });
+    return { notifications, unreadCount, total };
+  }
 
-  async getUserNotifications(userId: string): Promise<ServerNotification[]> {
-    if (!userId) return [];
-    return this.notifications.get(userId) || [];
+  async getUnreadCount(userId: string): Promise<number> {
+    if (!userId) return 0;
+    return await notificationRepository.getUnreadCount(userId);
   }
 
   async createNotification(
     userId: string,
-    data: Omit<ServerNotification, "id" | "time" | "userId">
-  ): Promise<ServerNotification> {
-    const list = this.notifications.get(userId) || [];
-    const notif: ServerNotification = {
-      id: `notif-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`,
-      userId,
-      title: data.title,
-      description: data.description,
-      time: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
-      type: data.type || "system",
-      company: data.company,
-      read: false,
+    input: CreateNotificationInput
+  ): Promise<NotificationRecord> {
+    const message = input.message || input.description || input.title;
+    const metadata = {
+      ...(input.metadata || {}),
+      ...(input.company ? { company: input.company } : {}),
     };
 
-    list.unshift(notif);
-    this.notifications.set(userId, list.slice(0, 50)); // Keep last 50
-    return notif;
+    const record = await notificationRepository.create({
+      userId,
+      type: input.type || "system",
+      title: input.title,
+      message,
+      isRead: false,
+      channel: input.channel || "in_app",
+      deliveryStatus: "delivered",
+      metadata,
+    });
+
+    try {
+      realtimeBus.emit("notification:new", { userId, notification: record });
+    } catch (busErr) {
+      logger.warn("[NotificationService] realtime bus emit error:", busErr);
+    }
+
+    return record;
   }
 
   async markAsRead(userId: string, notificationId: string): Promise<boolean> {
-    const list = this.notifications.get(userId);
-    if (!list) return false;
-    const item = list.find((n) => n.id === notificationId);
-    if (item) {
-      item.read = true;
-      return true;
-    }
-    return false;
+    if (!userId || !notificationId) return false;
+    return await notificationRepository.markAsRead(notificationId, userId);
+  }
+
+  async markAllAsRead(userId: string): Promise<boolean> {
+    if (!userId) return false;
+    const count = await notificationRepository.markAllAsRead(userId);
+    return count >= 0;
+  }
+
+  async archive(userId: string, notificationId: string): Promise<boolean> {
+    if (!userId || !notificationId) return false;
+    return await notificationRepository.archive(notificationId, userId);
+  }
+
+  async delete(userId: string, notificationId: string): Promise<boolean> {
+    if (!userId || !notificationId) return false;
+    return await notificationRepository.delete(notificationId, userId);
   }
 
   async clearAll(userId: string): Promise<boolean> {
-    this.notifications.set(userId, []);
-    return true;
+    if (!userId) return false;
+    const count = await notificationRepository.clearAll(userId);
+    return count >= 0;
   }
 }
 

@@ -12,6 +12,7 @@ export type ServerUserRecord = UserRecord;
 
 import { initDatabase, closePool } from "./server/db/postgresClient.js";
 import { migrator } from "./server/db/migrator.js";
+import { socketServer } from "./server/realtime/socketServer.js";
 
 const app = createApp();
 const PORT = config.app.port;
@@ -42,7 +43,10 @@ export async function setupVite() {
     });
   }
 
-  server = app.listen(PORT, "0.0.0.0", () => {
+  const httpServer = http.createServer(app);
+  socketServer.init(httpServer);
+
+  server = httpServer.listen(PORT, "0.0.0.0", () => {
     logger.info(`MOAS Server running on http://0.0.0.0:${PORT} [${config.app.env}]`);
   });
 
@@ -52,6 +56,7 @@ export async function setupVite() {
 // Graceful server shutdown on termination signals
 async function handleShutdown(signal: string) {
   logger.info(`Received ${signal}. Initiating graceful shutdown...`);
+  socketServer.close();
   await closePool();
   if (server) {
     server.close(() => {

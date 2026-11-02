@@ -2,6 +2,9 @@ import { Response } from "express";
 import { employerService } from "../services/EmployerService.js";
 import { jobService } from "../services/JobService.js";
 import { applicationService } from "../services/ApplicationService.js";
+import { resumeService } from "../services/ResumeService.js";
+import { applicationRepository } from "../repositories/ApplicationRepository.js";
+import { userRepository } from "../repositories/UserRepository.js";
 import { AuthenticatedRequest } from "../middleware/auth.js";
 import { sendSuccess, sendError } from "../utils/response.js";
 import { logger } from "../utils/logger.js";
@@ -257,6 +260,55 @@ export class EmployerController {
       logger.error("[Employer] scheduleInterview error:", error);
       const statusCode = error.message.includes("Forbidden") ? 403 : 400;
       return sendError(res, error.message || "Failed to schedule interview", statusCode);
+    }
+  }
+
+  async getApplicantResume(req: AuthenticatedRequest, res: Response) {
+    try {
+      if (!req.user) {
+        return sendError(res, "Authentication required.", 401);
+      }
+
+      const { id } = req.params; // applicationId
+      const isAuthorized = await applicationRepository.isApplicantForEmployer(id, req.user.userId);
+      if (!isAuthorized && req.user.role !== "Admin") {
+        return sendError(res, "Forbidden: You are not authorized to view resumes for this application.", 403);
+      }
+
+      const app = await applicationRepository.getById(id);
+      if (!app) {
+        return sendError(res, "Application not found.", 404);
+      }
+
+      let targetResumeId = app.resumeId;
+      if (!targetResumeId) {
+        const resumes = await userRepository.getResumes(app.candidateId);
+        const primary = resumes.find((r) => r.isPrimary) || resumes[0];
+        if (primary) targetResumeId = primary.id;
+      }
+
+      if (!targetResumeId) {
+        return sendError(res, "No resume attached to this application.", 404);
+      }
+
+      const caller = { userId: req.user.userId, role: req.user.role };
+      const download = await resumeService.downloadResume(targetResumeId, caller);
+
+      res.setHeader("Content-Type", download.mimeType);
+      res.setHeader(
+        "Content-Disposition",
+        `inline; filename="${encodeURIComponent(download.filename)}"`
+      );
+      res.setHeader("X-Content-Type-Options", "nosniff");
+      res.setHeader("Cache-Control", "private, no-cache, no-store, must-revalidate");
+      res.setHeader("Content-Length", download.buffer.length);
+
+      return res.send(download.buffer);
+    } catch (error: any) {
+      logger.error("[Employer] getApplicantResume error:", error);
+      const msg = error.message || "";
+      const statusCode = msg.includes("Forbidden") ? 403 : msg.includes("not found") ? 404 : 500;
+      return sendError(res, msg || "Failed to download resume", statusCode);
     }
   }
 }
