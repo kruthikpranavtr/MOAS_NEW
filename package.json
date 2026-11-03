@@ -6,6 +6,7 @@
   "scripts": {
     "dev": "tsx server.ts",
     "build": "vite build && esbuild server.ts --bundle --platform=node --format=esm --packages=external --sourcemap --outfile=dist/server.js",
+    "build:client": "vite build",
     "start": "node dist/server.js",
     "test": "tsx scripts/run-tests.ts",
     "preview": "vite preview",
@@ -19,6 +20,7 @@
   "dependencies": {
     "@electric-sql/pglite": "^0.5.8",
     "@google/genai": "^2.4.0",
+    "@rollup/wasm-node": "^4.64.3",
     "@tailwindcss/vite": "^4.1.14",
     "@types/multer": "^2.3.0",
     "@vitejs/plugin-react": "^5.0.4",
@@ -54,5 +56,8 @@
     "tsx": "^4.21.0",
     "typescript": "~5.8.2",
     "vite": "^6.2.3"
+  },
+  "overrides": {
+    "rollup": "npm:@rollup/wasm-node"
   }
 }
