@@ -730,11 +730,139 @@ export const initialJobs: Job[] = [
   },
 ];
 
-export const initialApplications: Application[] = [];
+export const initialApplications: Application[] = [
+  {
+    id: "app-kruthik-01",
+    jobId: "job-tech-1",
+    jobTitle: "Senior AI & Full-Stack Systems Engineer",
+    company: "Google DeepMind",
+    logo: "https://images.unsplash.com/photo-1572021335469-31706a17aaef?auto=format&fit=crop&q=80&w=120",
+    location: "Bengaluru / Mountain View (Hybrid)",
+    type: "Full-Time",
+    appliedDate: "24 Oct 2026",
+    status: "Offered",
+    stage: "Offered",
+    candidateId: "714022104026",
+    candidateName: "TR. Kruthik Pranav",
+    candidateEmail: "kruthikpranavtr@gmail.com",
+    resumeName: "TR_Kruthik_Pranav_AI_Systems_Engineer.pdf",
+    matchScore: 96,
+    notes: "Gemini 3.8 Flash RAG pipeline and BM25 tokenization verified.",
+    recruiterNotes: "Exceptional system design and 6-step autonomous agent demonstration. Offer packet extended."
+  },
+  {
+    id: "app-boopathi-02",
+    jobId: "job-tech-2",
+    jobTitle: "Distributed Systems & Backend Engineer",
+    company: "Stripe",
+    logo: "https://images.unsplash.com/photo-1559526324-4b87b5e36e44?auto=format&fit=crop&q=80&w=120",
+    location: "Bengaluru, India (Hybrid)",
+    type: "Full-Time",
+    appliedDate: "22 Oct 2026",
+    status: "Shortlisted",
+    stage: "Shortlisted",
+    candidateId: "714022104015",
+    candidateName: "V. Boopathi",
+    candidateEmail: "boopathi.v@moas.internal",
+    resumeName: "V_Boopathi_Distributed_Systems.pdf",
+    matchScore: 94,
+    notes: "Strong expertise in high-concurrency PostgreSQL and Redis caching.",
+    recruiterNotes: "Shortlisted for Round 2 Technical Deep Dive."
+  },
+  {
+    id: "app-deepak-03",
+    jobId: "job-tech-3",
+    jobTitle: "Cloud Infrastructure & DevOps Specialist",
+    company: "Amazon Web Services",
+    logo: "https://images.unsplash.com/photo-1523474255658-4af61b168344?auto=format&fit=crop&q=80&w=120",
+    location: "Hyderabad, India (Remote)",
+    type: "Full-Time",
+    appliedDate: "20 Oct 2026",
+    status: "Interview",
+    stage: "Interview",
+    candidateId: "714022104019",
+    candidateName: "A. Deepak",
+    candidateEmail: "deepak.a@moas.internal",
+    resumeName: "A_Deepak_Cloud_DevOps.pdf",
+    matchScore: 91,
+    notes: "Kubernetes orchestration and multi-cloud CI/CD automation verified.",
+    recruiterNotes: "Interview scheduled for Oct 28 at 2:00 PM IST."
+  },
+  {
+    id: "app-madhan-04",
+    jobId: "job-tech-4",
+    jobTitle: "AI Research & Quantitative ML Analyst",
+    company: "Anthropic AI",
+    logo: "https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?auto=format&fit=crop&q=80&w=120",
+    location: "San Francisco / Remote",
+    type: "Full-Time",
+    appliedDate: "18 Oct 2026",
+    status: "Under Review",
+    stage: "Under Review",
+    candidateId: "714022104028",
+    candidateName: "J. Madhan Kumar",
+    candidateEmail: "madhankumar.j@moas.internal",
+    resumeName: "J_Madhan_Kumar_AI_Research.pdf",
+    matchScore: 93,
+    notes: "Transformer attention visualization and mathematical modeling.",
+    recruiterNotes: "Under review by Principal Applied Scientist."
+  }
+];
 
 export const initialJobAlerts: JobAlert[] = [];
 
 export const initialConversations: Conversation[] = [
+  {
+    id: "conv-deepmind-recruiter",
+    recruiterName: "Sarah Lin",
+    company: "Google DeepMind",
+    logo: "https://images.unsplash.com/photo-1572021335469-31706a17aaef?auto=format&fit=crop&q=80&w=120",
+    role: "Staff Technical Recruiter - Frontier AI",
+    jobId: "job-tech-1",
+    jobTitle: "Senior AI & Full-Stack Systems Engineer",
+    unreadCount: 0,
+    lastMessage: "Your 6-step autonomous agent demonstration and BM25 RAG architecture scored 96% in our technical review. We would love to move forward to the offer discussion!",
+    lastMessageTime: "10:42 AM",
+    jobDetails: {
+      jobId: "job-tech-1",
+      experience: "3+ Years",
+      salary: "₹38,00,000 - ₹52,00,000 / yr",
+      jobType: "Full-Time (Hybrid)",
+      location: "Bangalore / Mountain View",
+    },
+    messages: [
+      {
+        id: "msg-dm-1",
+        sender: "recruiter",
+        text: "Hi Kruthik! Thank you for applying for the Senior AI & Full-Stack Systems Engineer opening at Google DeepMind via MOAS.",
+        time: "Yesterday, 3:15 PM",
+      },
+      {
+        id: "msg-dm-2",
+        sender: "user",
+        text: "Hi Sarah! Thank you for reaching out. I'm very excited about the autonomous agent and multi-modal RAG systems being built at DeepMind.",
+        time: "Yesterday, 3:25 PM",
+      },
+      {
+        id: "msg-dm-3",
+        sender: "recruiter",
+        text: "Our engineering panel was particularly impressed by your BM25 tokenization and Gemini 3.8 Flash RAG synthesis benchmarks in your portfolio. Your candidate fit score is 96%.",
+        time: "Yesterday, 4:10 PM",
+      },
+      {
+        id: "msg-dm-4",
+        sender: "user",
+        text: "That's wonderful to hear! The end-to-end PGlite vector persistence and autonomous 6-step agent pipeline were designed specifically to eliminate recruiting latency while preserving strict privacy guarantees.",
+        time: "Yesterday, 4:30 PM",
+      },
+      {
+        id: "msg-dm-5",
+        sender: "recruiter",
+        text: "Your 6-step autonomous agent demonstration and BM25 RAG architecture scored 96% in our technical review. We would love to move forward to the offer discussion! Are you available tomorrow at 11:00 AM IST?",
+        time: "10:42 AM",
+      },
+    ],
+  },
   {
     id: "conv-moas-ai",
     recruiterName: "MOAS AI Assistant",

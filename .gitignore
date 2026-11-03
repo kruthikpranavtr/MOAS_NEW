@@ -10,3 +10,6 @@ coverage/
 uploads/**
 !uploads/
 !uploads/.gitkeep
+ 
+*.docx
+

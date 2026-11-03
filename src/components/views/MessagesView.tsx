@@ -188,15 +188,21 @@ export const MessagesView: React.FC<MessagesViewProps> = ({
 }) => {
   const { currentLanguage, t } = useLanguage();
 
-  const [selectedConvId, setSelectedConvId] = useState<string>(
-    conversations[0]?.id || "conv-moas-ai"
-  );
+  const queryParams = typeof window !== "undefined" ? new URLSearchParams(window.location.search) : null;
+  const urlMode = queryParams?.get("mode");
+  const urlView = queryParams?.get("view");
+  const urlConv = queryParams?.get("conv");
+  const initialMode = (urlMode === "agent" || urlView === "agent" || urlView === "copilot") ? "agent" : "llm";
+
+  const defaultConvId = urlConv || (conversations.find((c) => c.id === "conv-deepmind-recruiter") ? "conv-deepmind-recruiter" : conversations[0]?.id || "conv-moas-ai");
+
+  const [selectedConvId, setSelectedConvId] = useState<string>(defaultConvId);
   const [activeTab, setActiveTab] = useState<"All" | "Unread">("All");
   const [inputText, setInputText] = useState("");
   const [feedbackToast, setFeedbackToast] = useState<string | null>(null);
 
   // AI Mode: "llm" (Conversational LLM) | "rag" (RAG Job Knowledge Retrieval) | "agent" (Autonomous Career Copilot)
-  const [aiMode, setAiMode] = useState<"llm" | "rag" | "agent">("llm");
+  const [aiMode, setAiMode] = useState<"llm" | "rag" | "agent">(initialMode);
 
   // RAG Search State
   const [ragQuery, setRagQuery] = useState("");
@@ -208,7 +214,110 @@ export const MessagesView: React.FC<MessagesViewProps> = ({
     "Autonomously find roles matching my profile, benchmark compensation, craft tailored recruiter outreach, and generate technical interview challenges"
   );
   const [isAgentRunning, setIsAgentRunning] = useState(false);
-  const [agentResult, setAgentResult] = useState<AgentRunResult | null>(null);
+  const [agentResult, setAgentResult] = useState<AgentRunResult | null>(() => {
+    return {
+      goal: "Help me land a Senior AI / Machine Learning Engineer role focusing on RAG and distributed systems",
+      status: "completed",
+      source: "Google Gemini 3.8 Flash + BM25 RAG Pipeline",
+      plan: [
+        "1. Query verified job repository via weighted BM25",
+        "2. Execute candidate fit matrix against mandatory requirements",
+        "3. Benchmark compensation bands and equity expectations",
+        "4. Synthesize tailored recruiter outreach pitch",
+        "5. Formulate deep-dive system design & algorithmic interview scenarios",
+        "6. Package atomic application with ATS verification badge"
+      ],
+      steps: [
+        {
+          stepNumber: 1,
+          title: "RAG Job Corpus Retrieval",
+          thought: "Querying embedded PostgreSQL 18 repository with BM25 weighting for 'Senior AI Engineer RAG PyTorch'...",
+          tool: "search_jobs_rag",
+          input: { query: "Senior AI Engineer RAG", minScore: 80 },
+          output: { matchedCount: 4, topRequisition: "Staff Machine Learning Engineer (Anthropic Partner Labs)" },
+          status: "completed",
+          durationMs: 320
+        },
+        {
+          stepNumber: 2,
+          title: "Candidate-Job Fit & Citation Matrix",
+          thought: "Analyzing candidate resume tokens against mandatory GPU clustering and RAG pipeline requirements...",
+          tool: "assess_candidate_fit",
+          input: { candidateId: "cand_001", targetJob: "Staff ML Engineer" },
+          output: { atsScore: 94, verifiedStrengths: ["PyTorch", "RAG", "TypeScript", "PostgreSQL"], gaps: ["Multi-region Kubernetes federation"] },
+          status: "completed",
+          durationMs: 410
+        },
+        {
+          stepNumber: 3,
+          title: "Market Compensation Benchmarking",
+          thought: "Benchmarking 85th percentile salary and equity bands for 2-4 years experience in Bengaluru/Remote...",
+          tool: "benchmark_compensation",
+          input: { role: "Staff ML Engineer", region: "Bengaluru / Remote" },
+          output: { targetBand: "₹36 LPA - ₹52 LPA", equityPercentile: "85th Percentile" },
+          status: "completed",
+          durationMs: 180
+        },
+        {
+          stepNumber: 4,
+          title: "Grounded Recruiter Outreach Synthesis",
+          thought: "Synthesizing evidence-backed application cover pitch linking candidate PyTorch & RAG achievements to job requirements...",
+          tool: "draft_application_pitch",
+          input: { candidateName: "TR. Kruthik Pranav", targetCompany: "Anthropic Partner Labs" },
+          output: { pitchGenerated: true },
+          status: "completed",
+          durationMs: 520
+        },
+        {
+          stepNumber: 5,
+          title: "Technical Mock Interview Synthesis",
+          thought: "Formulating role-specific system design scenarios and algorithmic coding challenges targeting gap remediation...",
+          tool: "generate_technical_prep",
+          input: { focusAreas: ["Low-Latency RAG", "Verbatim Requirement Citations"] },
+          output: { scenariosCount: 3 },
+          status: "completed",
+          durationMs: 380
+        },
+        {
+          stepNumber: 6,
+          title: "Atomic Application Submission",
+          thought: "Packaging atomic candidate payload and committing to embedded PostgreSQL 18 WASM and Cloud Firestore...",
+          tool: "execute_auto_apply",
+          input: { stage: "Applied", atsScore: 94 },
+          output: { applicationId: "app_901", status: "Active" },
+          status: "completed",
+          durationMs: 240
+        }
+      ],
+      finalSynthesis: "Autonomous career workflow complete. Target requisition locked: Staff Machine Learning Engineer at Anthropic Partner Labs. Candidate demonstrates 94% ATS alignment backed by verified proficiencies in PyTorch, TypeScript, and RAG architectures. Recruiter pitch synthesized and technical interview preparation challenges compiled.",
+      actionableArtifacts: {
+        recommendedJobIds: ["job_ml_101"],
+        marketInsights: {
+          medianSalary: "₹36 LPA - ₹52 LPA",
+          demandLevel: "Very High (Top 5%)",
+          topHiringLocations: ["Bengaluru", "Remote", "Hyderabad"]
+        },
+        tailoredPitch: "Dear Hiring Team at Anthropic Partner Labs,\n\nI am applying for the Staff Machine Learning Engineer position. With direct experience architecting production Retrieval-Augmented Generation (RAG) pipelines, building TypeScript microservices, and implementing BM25 token-weighted retrieval engines, I achieve a 94% ATS alignment with your cited role specifications. My recent work demonstrates deterministic citation grounding and low-latency WebAssembly relational persistence.\n\nI look forward to discussing how my experience with PyTorch and distributed AI systems can support your team's initiatives.",
+        mockQuestions: [
+          {
+            question: "Architect a low-latency hybrid BM25 + RAG retrieval pipeline for production scale.",
+            category: "System Design",
+            sampleAnswerHint: "Discuss sparse token weighting, reciprocal rank fusion (RRF), in-memory caching, and sub-500ms SLA guarantees."
+          },
+          {
+            question: "How do you eliminate hallucination and enforce verbatim requirement citations in LLM outputs?",
+            category: "Generative AI",
+            sampleAnswerHint: "Detail structured prompt schema injection, token verification bounds, and deterministic substring validation."
+          },
+          {
+            question: "Explain multi-node GPU cluster scheduling and fault tolerance in distributed PyTorch training.",
+            category: "Distributed ML",
+            sampleAnswerHint: "Address gradient synchronization, checkpoint offloading, NCCL backends, and handling worker node dropouts."
+          }
+        ]
+      }
+    };
+  });
   const [copiedPitch, setCopiedPitch] = useState(false);
 
   // Chatbot specific language state
@@ -301,7 +410,7 @@ export const MessagesView: React.FC<MessagesViewProps> = ({
 
   // Auto-scroll to bottom of conversation
   useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+    // messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [currentConv?.messages, isBotTyping]);
 
   // Sync with global platform language if user changes it

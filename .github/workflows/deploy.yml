@@ -31,10 +31,12 @@ jobs:
         run: npm ci
 
       - name: Build static site
-        run: npx vite build
+        run: npm run build
 
-      - name: Create 404 fallback for SPA
-        run: cp dist/index.html dist/404.html
+      - name: Create 404 fallback and nojekyll
+        run: |
+          cp dist/index.html dist/404.html
+          touch dist/.nojekyll
 
       - name: Setup Pages
         uses: actions/configure-pages@v5

@@ -70,9 +70,21 @@ const pageVariants = {
 };
 
 export default function App() {
+  const queryParams = typeof window !== "undefined" ? new URLSearchParams(window.location.search) : null;
+  const urlView = queryParams?.get("view");
+  const urlRole = queryParams?.get("role");
+
   // Authentication Guard: strictly protects the application
-  const [isAuthenticated, setIsAuthenticated] = useState(false);
-  const [currentNav, setCurrentNav] = useState<NavigationState>("login");
+  const [isAuthenticated, setIsAuthenticated] = useState<boolean>(() => Boolean(urlView));
+  const [currentNav, setCurrentNav] = useState<NavigationState>(() => {
+    if (urlView === "candidate-dashboard" || urlView === "dashboard") return "dashboard/jobseeker";
+    if (urlView === "kanban" || urlView === "employer-dashboard") return "dashboard/employer";
+    if (urlView === "post-job") return "post-job";
+    if (urlView === "resume" || urlView === "cv" || urlView === "resume-cv") return "resume-cv";
+    if (urlView === "messages" || urlView === "copilot" || urlView === "agent") return "messages";
+    if (urlView === "find-jobs") return "find-jobs";
+    return "login";
+  });
   const [registeredUsers, setRegisteredUsers] = useState<RegisteredUser[]>([]);
   const [pendingUser, setPendingUser] = useState<RegisteredUser | null>(null);
   const [registrationNotice, setRegistrationNotice] = useState<string | undefined>(undefined);
@@ -94,7 +106,45 @@ export default function App() {
   const [isRateModalOpen, setIsRateModalOpen] = useState(false);
   const [targetRatingCompany, setTargetRatingCompany] = useState("");
 
-  const [user, setUser] = useState<UserProfile>(initialProfile);
+  const [user, setUser] = useState<UserProfile>(() => {
+    const isEmp = urlRole === "employer" || urlView === "kanban" || urlView === "employer-dashboard" || urlView === "post-job";
+    if (isEmp) {
+      return {
+        ...initialProfile,
+        id: "emp_001",
+        name: "Priya Natarajan",
+        role: "Employer",
+        title: "Head of AI Talent & Engineering Acquisition",
+        companyName: "Anthropic Partner Labs",
+        companyEmail: "talent@anthropic-partner.io",
+        email: "talent@anthropic-partner.io",
+        industry: "Artificial Intelligence & RAG Systems",
+        location: "Bengaluru, India",
+        avatarUrl: "https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?w=120&h=120&fit=crop",
+      };
+    }
+    return {
+      ...initialProfile,
+      id: "cand_001",
+      name: "Kruthik Pranav TR",
+      role: "Job Seeker",
+      email: "kruthik@srishakthi.ac.in",
+      title: "AI & Full-Stack Engineer (RAG & Agentic Systems)",
+      skills: ["React 19", "TypeScript", "Node.js 22", "PyTorch", "RAG", "PostgreSQL 18 WASM", "BM25 Retrieval", "Kubernetes"],
+      experienceLevel: "2 Years",
+      location: "Coimbatore / Bengaluru, India",
+      resumes: [
+        {
+          id: "res-001",
+          name: "Kruthik_Pranav_TR_AI_Engineer_Resume.pdf",
+          size: "1.4 MB",
+          updatedAt: "October 2026",
+          type: "PDF",
+          isPrimary: true,
+        }
+      ]
+    };
+  });
 
   // Resilient JSON fetch helper with retry for cold-start resilience
   const safeFetchJson = async <T,>(url: string, retries = 2, delayMs = 600): Promise<T | null> => {

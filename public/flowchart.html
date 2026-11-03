@@ -1,0 +1,166 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Figure 5.1 End-to-End System Execution Flowchart</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      background-color: #ffffff;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      min-height: 100vh;
+      padding: 30px;
+    }
+    .container {
+      max-width: 960px;
+      width: 100%;
+      background: #ffffff;
+      border: 1px solid #e2e8f0;
+      border-radius: 16px;
+      padding: 32px 28px;
+      box-shadow: 0 4px 20px rgba(0, 0, 0, 0.05);
+    }
+    .title {
+      text-align: center;
+      font-size: 18px;
+      font-weight: 800;
+      color: #0f172a;
+      letter-spacing: -0.02em;
+      margin-bottom: 6px;
+    }
+    .subtitle {
+      text-align: center;
+      font-size: 12px;
+      color: #64748b;
+      margin-bottom: 24px;
+    }
+    svg {
+      width: 100%;
+      height: auto;
+      display: block;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="title">MOAS - End-to-End System Execution Flowchart</div>
+    <div class="subtitle">Procedural Workflow: Authentication, RAG Retrieval, Multi-Step ReAct Agent & Hybrid Persistence</div>
+    
+    <svg viewBox="0 0 900 680" fill="none" xmlns="http://www.w3.org/2000/svg">
+      <defs>
+        <marker id="arrow" viewBox="0 0 10 10" refX="6" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+          <path d="M 0 1.5 L 8 5 L 0 8.5 z" fill="#0f766e" />
+        </marker>
+        <marker id="arrow-blue" viewBox="0 0 10 10" refX="6" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+          <path d="M 0 1.5 L 8 5 L 0 8.5 z" fill="#2563eb" />
+        </marker>
+        <linearGradient id="startGrad" x1="0" y1="0" x2="1" y2="1">
+          <stop offset="0%" stop-color="#0f766e"/>
+          <stop offset="100%" stop-color="#115e59"/>
+        </linearGradient>
+        <linearGradient id="cardGrad" x1="0" y1="0" x2="1" y2="1">
+          <stop offset="0%" stop-color="#f8fafc"/>
+          <stop offset="100%" stop-color="#f1f5f9"/>
+        </linearGradient>
+        <filter id="shadow" x="-5%" y="-5%" width="110%" height="115%" filterUnits="userSpaceOnUse">
+          <feDropShadow dx="0" dy="2" stdDeviation="3" flood-color="#0f172a" flood-opacity="0.08"/>
+        </filter>
+      </defs>
+
+      <!-- Step 1: Start -->
+      <g filter="url(#shadow)">
+        <rect x="360" y="20" width="180" height="42" rx="21" fill="url(#startGrad)"/>
+        <text x="450" y="46" text-anchor="middle" fill="#ffffff" font-size="14" font-weight="700">Start System</text>
+      </g>
+      <line x1="450" y1="62" x2="450" y2="90" stroke="#0f766e" stroke-width="2.5" marker-end="url(#arrow)"/>
+
+      <!-- Step 2: User Registration & Login -->
+      <g filter="url(#shadow)">
+        <rect x="300" y="92" width="300" height="52" rx="10" fill="#ffffff" stroke="#cbd5e1" stroke-width="1.5"/>
+        <text x="450" y="116" text-anchor="middle" fill="#0f172a" font-size="13" font-weight="700">User Registration / Login Portal</text>
+        <text x="450" y="133" text-anchor="middle" fill="#64748b" font-size="10.5">Role Selection: Candidate | Employer | Admin</text>
+      </g>
+      <line x1="450" y1="144" x2="450" y2="172" stroke="#0f766e" stroke-width="2.5" marker-end="url(#arrow)"/>
+
+      <!-- Step 3: JWT & RBAC Verification -->
+      <g filter="url(#shadow)">
+        <polygon points="450,174 580,212 450,250 320,212" fill="#f0fdfa" stroke="#0f766e" stroke-width="2"/>
+        <text x="450" y="208" text-anchor="middle" fill="#0f766e" font-size="12" font-weight="800">JWT & RBAC</text>
+        <text x="450" y="224" text-anchor="middle" fill="#115e59" font-size="10.5" font-weight="600">Verification</text>
+      </g>
+
+      <!-- Branches to Candidate or Employer Portals -->
+      <line x1="320" y1="212" x2="200" y2="212" stroke="#0f766e" stroke-width="2"/>
+      <line x1="200" y1="212" x2="200" y2="276" stroke="#0f766e" stroke-width="2" marker-end="url(#arrow)"/>
+      <text x="240" y="204" text-anchor="middle" fill="#0f766e" font-size="11" font-weight="700">[Candidate Role]</text>
+
+      <line x1="580" y1="212" x2="700" y2="212" stroke="#2563eb" stroke-width="2"/>
+      <line x1="700" y1="212" x2="700" y2="276" stroke="#2563eb" stroke-width="2" marker-end="url(#arrow-blue)"/>
+      <text x="660" y="204" text-anchor="middle" fill="#2563eb" font-size="11" font-weight="700">[Employer Role]</text>
+
+      <!-- Candidate Branch -->
+      <g filter="url(#shadow)">
+        <rect x="80" y="278" width="240" height="54" rx="10" fill="#ffffff" stroke="#14b8a6" stroke-width="1.5"/>
+        <text x="200" y="302" text-anchor="middle" fill="#0f172a" font-size="13" font-weight="700">Candidate Portal</text>
+        <text x="200" y="320" text-anchor="middle" fill="#64748b" font-size="10.5">Resume Upload (.pdf/.docx)</text>
+      </g>
+      <line x1="200" y1="332" x2="200" y2="366" stroke="#0f766e" stroke-width="2" marker-end="url(#arrow)"/>
+
+      <!-- Employer Branch -->
+      <g filter="url(#shadow)">
+        <rect x="580" y="278" width="240" height="54" rx="10" fill="#ffffff" stroke="#3b82f6" stroke-width="1.5"/>
+        <text x="700" y="302" text-anchor="middle" fill="#0f172a" font-size="13" font-weight="700">Employer Portal</text>
+        <text x="700" y="320" text-anchor="middle" fill="#64748b" font-size="10.5">AI Job Description Generator</text>
+      </g>
+      <line x1="700" y1="332" x2="700" y2="366" stroke="#2563eb" stroke-width="2" marker-end="url(#arrow-blue)"/>
+
+      <!-- Step 5: BM25 Tokenisation Engine -->
+      <g filter="url(#shadow)">
+        <rect x="80" y="368" width="240" height="54" rx="10" fill="#f8fafc" stroke="#0f766e" stroke-width="1.5"/>
+        <text x="200" y="392" text-anchor="middle" fill="#0f172a" font-size="12.5" font-weight="700">BM25 Tokenisation</text>
+        <text x="200" y="409" text-anchor="middle" fill="#475569" font-size="10">Calibrated Weights (Title 4x, Skills 2.5x)</text>
+      </g>
+
+      <!-- Employer Kanban Board -->
+      <g filter="url(#shadow)">
+        <rect x="580" y="368" width="240" height="54" rx="10" fill="#f8fafc" stroke="#2563eb" stroke-width="1.5"/>
+        <text x="700" y="392" text-anchor="middle" fill="#0f172a" font-size="12.5" font-weight="700">Visual ATS Kanban Pipeline</text>
+        <text x="700" y="409" text-anchor="middle" fill="#475569" font-size="10">Applied → Shortlisted → Interview</text>
+      </g>
+
+      <!-- Convergence to Core Intelligence -->
+      <line x1="200" y1="422" x2="200" y2="456" stroke="#0f766e" stroke-width="2"/>
+      <line x1="200" y1="456" x2="430" y2="456" stroke="#0f766e" stroke-width="2" marker-end="url(#arrow)"/>
+
+      <line x1="700" y1="422" x2="700" y2="456" stroke="#2563eb" stroke-width="2"/>
+      <line x1="700" y1="456" x2="470" y2="456" stroke="#2563eb" stroke-width="2" marker-end="url(#arrow)"/>
+
+      <!-- Step 6: Gemini 3.8 Flash RAG Synthesis -->
+      <g filter="url(#shadow)">
+        <rect x="250" y="440" width="400" height="60" rx="12" fill="#ffffff" stroke="#0f766e" stroke-width="2"/>
+        <text x="450" y="466" text-anchor="middle" fill="#0f766e" font-size="14" font-weight="800">Google Gemini 3.8 Flash RAG Synthesis</text>
+        <text x="450" y="486" text-anchor="middle" fill="#334155" font-size="11">Calibrated ATS Scoring (80%–99%) • Verbatim Requirement Citations</text>
+      </g>
+      <line x1="450" y1="500" x2="450" y2="528" stroke="#0f766e" stroke-width="2.5" marker-end="url(#arrow)"/>
+
+      <!-- Step 7: Autonomous 6-Step Career Copilot Agent -->
+      <g filter="url(#shadow)">
+        <rect x="230" y="530" width="440" height="52" rx="10" fill="#f0fdfa" stroke="#0f766e" stroke-width="1.5"/>
+        <text x="450" y="552" text-anchor="middle" fill="#0f766e" font-size="13" font-weight="700">Autonomous 6-Step Career Copilot Agent</text>
+        <text x="450" y="569" text-anchor="middle" fill="#115e59" font-size="10.5">search_jobs_rag → fit → benchmark → pitch → interview_prep → auto_apply</text>
+      </g>
+      <line x1="450" y1="582" x2="450" y2="606" stroke="#0f766e" stroke-width="2.5" marker-end="url(#arrow)"/>
+
+      <!-- Step 8: Hybrid Database Persistence -->
+      <g filter="url(#shadow)">
+        <rect x="270" y="608" width="360" height="42" rx="8" fill="#1e293b"/>
+        <text x="450" y="634" text-anchor="middle" fill="#f8fafc" font-size="12" font-weight="700">PGlite PostgreSQL 18 WASM & Cloud Firestore Persistence</text>
+      </g>
+    </svg>
+  </div>
+</body>
+</html>
