@@ -1,5 +1,5 @@
 import crypto from "crypto";
-import { otpRepository, DbOtpRecord } from "../repositories/OtpRepository.js";
+import { otpRepository } from "../repositories/OtpRepository.js";
 import { userRepository } from "../repositories/UserRepository.js";
 import { sendTextBeeSms, SendSmsResult } from "../integrations/textbee.js";
 import { generateNumericOtp, hashOtp } from "../utils/crypto.js";
@@ -45,8 +45,8 @@ export class OtpService {
     const expiresAt = new Date(now + this.OTP_TTL_MS);
     const resendAvailableAt = new Date(now + this.RESEND_COOLDOWN_MS);
 
-    // Persist securely to PostgreSQL (hashed at rest)
-    await otpRepository.create({
+    // Persist before dispatch so a code can be verified as soon as it arrives.
+    const stored = await otpRepository.create({
       identifier: normalizedPhone,
       otpHash,
       purpose,
@@ -61,18 +61,16 @@ export class OtpService {
     // Provider call
     const smsResult = await sendTextBeeSms(normalizedPhone, smsBody);
 
-    const response: SendSmsResult & { normalizedPhone: string; debugOtp?: string } = {
-      ...smsResult,
-      normalizedPhone,
-    };
-
-    // Only in automated test environment: expose debugOtp for test assertions
     const isTestMode = config.app.isTest || process.env.NODE_ENV === "test";
-    if (isTestMode) {
-      response.debugOtp = rawOtp;
+    if (isTestMode && !config.integrations.textbee.isConfigured) {
+      return { ...smsResult, success: true, normalizedPhone, debugOtp: rawOtp };
     }
 
-    return response;
+    if (!smsResult.smsSent) {
+      await otpRepository.delete(stored.id);
+    }
+
+    return { ...smsResult, normalizedPhone };
   }
 
   async verifyOtp(

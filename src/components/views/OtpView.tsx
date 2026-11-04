@@ -29,8 +29,8 @@ export const OtpView: React.FC<OtpViewProps> = ({
   onBackToRegister,
 }) => {
   const [otpInputs, setOtpInputs] = useState<string[]>(["", "", "", "", "", ""]);
-  const [timer, setTimer] = useState(300); // 5 minute TTL
-  const [resendCooldown, setResendCooldown] = useState(30);
+  const [timer, setTimer] = useState(0);
+  const [resendCooldown, setResendCooldown] = useState(0);
   const [isVerifying, setIsVerifying] = useState(false);
   const [isSending, setIsSending] = useState(false);
   const [verificationError, setVerificationError] = useState<string | null>(null);
@@ -70,6 +70,8 @@ export const OtpView: React.FC<OtpViewProps> = ({
   // Call the backend to generate and dispatch OTP via TextBee SMS
   const sendOtpSms = async (isExplicitResend = false) => {
     setIsSending(true);
+    setSmsSent(false);
+    setDispatchNotice(null);
     setSmsError(null);
     setVerificationError(null);
     setOtpInputs(["", "", "", "", "", ""]);
@@ -85,28 +87,17 @@ export const OtpView: React.FC<OtpViewProps> = ({
 
       const result = await response.json();
 
-      if (result.success) {
-        if (result.smsSent) {
-          setSmsSent(true);
-          setDispatchNotice(`OTP sent via SMS to ${phone}. Please check your phone messages!`);
-        } else {
-          setSmsSent(false);
-          setDispatchNotice(`SMS could not be delivered: ${result.message || "Gateway unavailable"}`);
-          if (result.textbeeError) {
-            setSmsError(result.textbeeError?.message || "SMS delivery failed");
-          }
-        }
-
+      if (response.ok && result.success && result.smsSent) {
+        setSmsSent(true);
+        setDispatchNotice("SMS accepted by the gateway. Check your phone for the code.");
         setTimer(300); // 5 min TTL
         setResendCooldown(30);
       } else {
-        setSmsError(result.error || "Failed to send OTP");
-        setDispatchNotice(`Failed to send OTP: ${result.error || "Service unavailable"}`);
+        setSmsError(result.error || result.message || "Failed to send OTP.");
       }
     } catch (err: any) {
       console.error("[OTP] Send error:", err);
-      setSmsError(err.message || "Network error");
-      setDispatchNotice("Network error. Could not reach OTP service.");
+      setSmsError("Could not reach the OTP service. Please try again.");
     } finally {
       setIsSending(false);
       // Auto-dismiss notice after 6 seconds
@@ -163,7 +154,7 @@ export const OtpView: React.FC<OtpViewProps> = ({
 
   // Resend / generate new OTP via SMS
   const handleResendOtp = () => {
-    if (resendCooldown > 0 || isSending) return;
+    if (resendCooldown > 0 || isSending || isVerifying || isSuccess) return;
     sendOtpSms(true);
   };
 
@@ -177,7 +168,7 @@ export const OtpView: React.FC<OtpViewProps> = ({
       return;
     }
 
-    if (timer <= 0) {
+    if (smsSent && timer <= 0) {
       setVerificationError("Verification code has expired. Please click 'Resend OTP'.");
       return;
     }
@@ -201,16 +192,12 @@ export const OtpView: React.FC<OtpViewProps> = ({
           setIsVerifying(false);
           onVerifySuccess();
         }, 600);
-      } else if (result.success && !result.verified) {
-        setIsVerifying(false);
-        const rem = result.attemptsRemaining ?? Math.max(0, attemptsRemaining - 1);
-        setAttemptsRemaining(rem);
-        setVerificationError(
-          result.message || (rem > 0 ? `Incorrect verification code. ${rem} attempt${rem === 1 ? "" : "s"} remaining.` : "Maximum attempts reached. Please request a new OTP.")
-        );
       } else {
         setIsVerifying(false);
-        setVerificationError(result.error || "Verification failed. Please try again.");
+        if (typeof result.attemptsRemaining === "number") {
+          setAttemptsRemaining(result.attemptsRemaining);
+        }
+        setVerificationError(result.error || result.message || "Verification failed. Please try again.");
       }
     } catch (err: any) {
       setIsVerifying(false);
@@ -243,7 +230,7 @@ export const OtpView: React.FC<OtpViewProps> = ({
             </div>
             <div>
               <p className="text-xs font-bold text-teal-300">
-                {smsSent ? "SMS Sent to Your Phone" : "Notification"}
+                Verification SMS Requested
               </p>
               <p className="text-xs text-slate-200 mt-0.5">{dispatchNotice}</p>
             </div>
@@ -322,12 +309,12 @@ export const OtpView: React.FC<OtpViewProps> = ({
             ) : smsSent ? (
               <span className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-emerald-50 border border-emerald-200 rounded-full text-xs font-semibold text-emerald-800">
                 <Wifi className="w-3.5 h-3.5 text-emerald-600" />
-                SMS sent to your mobile phone
+                SMS accepted by the gateway
               </span>
             ) : smsError ? (
               <span className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-rose-50 border border-rose-200 rounded-full text-xs font-semibold text-rose-800">
                 <WifiOff className="w-3.5 h-3.5 text-rose-600" />
-                SMS issue — click Resend below
+                {smsError}
               </span>
             ) : null}
           </div>
@@ -382,21 +369,21 @@ export const OtpView: React.FC<OtpViewProps> = ({
             {/* Timer and Resend section */}
             <div className="mt-6 flex flex-col sm:flex-row items-center justify-between text-xs text-slate-500 gap-2 border-t border-slate-100 pt-4">
               <div>
-                {timer > 0 ? (
+                {smsSent && (timer > 0 ? (
                   <span>
                     Expires in:{" "}
                     <span className="font-bold text-slate-800">{formatTimer(timer)}</span>
                   </span>
                 ) : (
                   <span className="text-rose-600 font-bold">Code has expired</span>
-                )}
+                ))}
               </div>
 
               <div>
                 <button
                   type="button"
                   onClick={handleResendOtp}
-                  disabled={resendCooldown > 0 || isSending}
+                  disabled={resendCooldown > 0 || isSending || isVerifying || isSuccess}
                   className="inline-flex items-center gap-1.5 font-bold text-teal-700 hover:text-teal-900 cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
                 >
                   <RotateCw className={`w-3.5 h-3.5 ${isSending ? "animate-spin" : ""}`} />
@@ -414,7 +401,7 @@ export const OtpView: React.FC<OtpViewProps> = ({
             {/* Verify button */}
             <button
               type="submit"
-              disabled={isVerifying || isSuccess || timer <= 0 || otpInputs.join("").length < 6}
+              disabled={isSending || isVerifying || isSuccess || (smsSent && timer <= 0) || otpInputs.join("").length < 6}
               className="w-full mt-6 py-3.5 px-4 bg-teal-700 hover:bg-teal-800 active:bg-teal-900 text-white rounded-xl font-bold text-sm shadow-md transition-all flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
             >
               {isVerifying ? (

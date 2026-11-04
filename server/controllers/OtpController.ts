@@ -11,12 +11,11 @@ export class OtpController {
       }
 
       const result = await otpService.sendOtp(phone, !!resend, purpose || "phone_verification");
-      return res.json({
+      return res.status(result.success ? 200 : 503).json({
         success: result.success,
         smsSent: result.smsSent,
         message: result.message,
         smsBatchId: result.smsBatchId,
-        textbeeError: result.textbeeError,
         ...(result.debugOtp ? { debugOtp: result.debugOtp } : {}),
       });
     } catch (error: any) {

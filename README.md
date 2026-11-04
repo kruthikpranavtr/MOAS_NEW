@@ -131,6 +131,8 @@ cp .env.example .env
 
 Fill in the configuration values required by your environment. Never commit API keys, credentials, or other secrets.
 
+Registration OTPs use TextBee. Set `TEXTBEE_API_KEY` and `TEXTBEE_DEVICE_ID` in the server's `.env` and keep the registered Android device online with SMS permission and an SMS-capable SIM. Restart the server after changing these values. [TextBee setup and delivery guide](https://textbee.dev/docs/sending-sms)
+
 **Step 5: Start the development server**
 
 ```bash

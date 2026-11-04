@@ -10,6 +10,7 @@ import { otpService } from "../server/services/OtpService.js";
 import { passwordResetService } from "../server/services/PasswordResetService.js";
 import { sessionRepository } from "../server/repositories/SessionRepository.js";
 import { hashPassword, verifyPassword } from "../server/utils/crypto.js";
+import { config } from "../server/config/index.js";
 
 const { app } = await import("../server.js");
 
@@ -302,7 +303,7 @@ test("MOAS Phase 5 Authentication, Registration, OTP & Session Management Test S
       .post("/api/otp/verify")
       .send({
         phone: testOtpPhone,
-        otp: "000000",
+        otp: activeOtpCode === "000000" ? "000001" : "000000",
         purpose: "phone_verification",
       });
 
@@ -336,6 +337,48 @@ test("MOAS Phase 5 Authentication, Registration, OTP & Session Management Test S
 
     assert.equal(replayRes.status, 400);
     assert.equal(replayRes.body.verified, false);
+  });
+
+  await t.test("SMS gateway rejection allows an immediate resend and the new code verifies", async (t) => {
+    const phone = "+919876543211";
+    const originalTextBeeConfig = { ...config.integrations.textbee };
+    Object.assign(config.integrations.textbee, { apiKey: "test-key", deviceId: "test-device", isConfigured: true });
+    t.after(() => {
+      Object.assign(config.integrations.textbee, originalTextBeeConfig);
+    });
+
+    let acceptedCode: string | undefined;
+    const rejectSms: typeof fetch = async () => new Response("Unavailable", { status: 502 });
+    const gateway = t.mock.method(globalThis, "fetch", rejectSms);
+    const send = () => request(app).post("/api/otp/send").send({ phone });
+
+    const rejected = await send();
+    assert.equal(rejected.status, 503);
+    assert.equal(rejected.body.success, false);
+    assert.equal(rejected.body.smsSent, false);
+    assert.equal(rejected.body.debugOtp, undefined);
+
+    gateway.mock.mockImplementation(async () => Response.json({ data: { successCount: 0, failureCount: 1 } }));
+    const dispatchFailed = await send();
+    assert.equal(dispatchFailed.status, 503);
+    assert.equal(dispatchFailed.body.smsSent, false);
+
+    gateway.mock.mockImplementation(async (_url, init) => {
+      const body = JSON.parse(String(init?.body));
+      assert.deepEqual(body.recipients, [phone]);
+      acceptedCode = body.message.match(/\b\d{6}\b/)?.[0];
+      return Response.json({ data: { smsBatchId: "test-batch" } });
+    });
+
+    const retried = await send();
+    assert.equal(retried.status, 200);
+    assert.equal(retried.body.smsSent, true);
+    assert.equal(retried.body.smsBatchId, "test-batch");
+    assert.ok(acceptedCode);
+
+    const verified = await request(app).post("/api/otp/verify").send({ phone, otp: acceptedCode });
+    assert.equal(verified.status, 200);
+    assert.equal(verified.body.verified, true);
   });
 
   // 16. Password Reset Flow with Session Revocation

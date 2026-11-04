@@ -6,7 +6,6 @@ export interface SendSmsResult {
   smsSent: boolean;
   message: string;
   smsBatchId?: string;
-  textbeeError?: any;
 }
 
 export async function sendTextBeeSms(recipientPhone: string, messageBody: string): Promise<SendSmsResult> {
@@ -15,7 +14,7 @@ export async function sendTextBeeSms(recipientPhone: string, messageBody: string
   if (!isConfigured || !apiKey || !deviceId) {
     logger.warn("[OTP] TextBee credentials not configured. Configure TEXTBEE_API_KEY and TEXTBEE_DEVICE_ID in .env.");
     return {
-      success: true,
+      success: false,
       smsSent: false,
       message: "SMS gateway is not configured.",
     };
@@ -24,6 +23,7 @@ export async function sendTextBeeSms(recipientPhone: string, messageBody: string
   try {
     const response = await fetch("https://api.textbee.dev/api/v1/gateway/send-sms", {
       method: "POST",
+      signal: AbortSignal.timeout(10_000),
       headers: {
         "Content-Type": "application/json",
         "x-api-key": apiKey,
@@ -35,30 +35,28 @@ export async function sendTextBeeSms(recipientPhone: string, messageBody: string
       }),
     });
 
-    const result = await response.json();
-
-    if (!response.ok) {
-      logger.error("[OTP] TextBee SMS send failed:", result);
+    const outcome = response.ok ? (await response.json())?.data : undefined;
+    if (!response.ok || outcome?.success === false || outcome?.successCount === 0 || outcome?.failureCount > 0) {
+      logger.error(`[OTP] TextBee SMS dispatch failed (HTTP ${response.status}).`);
       return {
-        success: true,
+        success: false,
         smsSent: false,
-        message: "Failed to dispatch SMS through carrier gateway.",
-        textbeeError: result,
+        message: "The SMS gateway could not send the verification code. Please try again.",
       };
     }
 
     return {
       success: true,
       smsSent: true,
-      message: `OTP sent successfully to ${recipientPhone} via SMS.`,
-      smsBatchId: result?.data?.smsBatchId,
+      message: "SMS accepted by the gateway.",
+      smsBatchId: outcome?.smsBatchId,
     };
-  } catch (error: any) {
-    logger.error("[OTP] TextBee network exception:", error);
+  } catch (error) {
+    logger.error("[OTP] TextBee request failed:", error instanceof Error ? error.name : "Unknown error");
     return {
       success: false,
       smsSent: false,
-      message: error.message || "Failed to dispatch SMS",
+      message: "The SMS gateway is unavailable. Please try again.",
     };
   }
 }
